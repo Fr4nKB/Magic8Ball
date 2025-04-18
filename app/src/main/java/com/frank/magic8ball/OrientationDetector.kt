@@ -7,12 +7,22 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import kotlin.math.atan2
 
+/**
+ * A class for detecting orientation changes using gyroscope sensors.
+ * This class monitors sensor events and applies a smoothing filter to gyroscope data,
+ * triggering a callback with the pitch angle when significant changes are detected.
+ *
+ * @param context The application context used to access the sensor service.
+ * @param onOrientationChange A callback invoked with the pitch angle when an orientation change occurs.
+ *
+ * @author Fr4nKB
+ */
 class OrientationDetector(
     private val context: Context,
     private val onOrientationChange: (Double) -> Unit = {}
 ) {
     private lateinit var sensorEventListener: SensorEventListener
-    private var isActive by SynchronizedFlag(false)
+    private var isActive by SynchronizedFlag(false) // ensure thread safety
 
     companion object {
         const val TAG = "Magic8Ball:OrientationDetector"

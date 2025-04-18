@@ -15,7 +15,7 @@
     <string-array name="neutral_responses">
         <item>MAYBE</item>
         <item>NO IDEA</item>
-        <item>ASK LATE ...</item>
+        <item>ASK LATER ...</item>
         <item>REPLY HAZY</item>
         <item>NOT SO SURE</item>
         <item>TOO SOON YET</item>

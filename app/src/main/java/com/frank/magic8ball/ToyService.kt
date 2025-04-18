@@ -22,8 +22,13 @@ import com.nothing.ketchum.GlyphToy
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.random.Random
+import com.frank.magic8ball.Util.createPreviewBitmap
 
-
+/**
+ * The main service through which we interact with the GDK.
+ *
+ * @author Fr4nKB
+ */
 class ToyService: Service() {
     private var mGM: GlyphMatrixManager? = null
     private var mCallback: GlyphMatrixManager.Callback? = null
@@ -36,8 +41,11 @@ class ToyService: Service() {
     private lateinit var negativeResponses: List<String>
     private lateinit var stronkResponses: List<String>
 
+    private val previewBitmap = createPreviewBitmap(MATRIX_DIMENSION)
     private var highlightedTokenIndex = 0
     private var currentResponse: String = ""
+
+    private lateinit var vibratorManager: VibratorManager
 
     // getting a positive or negative response is influenced by the force applied to the shake
     // neutral responses always have the same probability
@@ -45,6 +53,8 @@ class ToyService: Service() {
 
     companion object {
         const val TAG = "Magic8Ball:ToyService"
+
+        const val MATRIX_DIMENSION = 25
 
         const val MIN_PROBABILITY_THRESHOLD = 20
         const val DEFAULT_PROBABILITY_THRESHOLD = 33
@@ -101,9 +111,7 @@ class ToyService: Service() {
             start()
         }
 
-        val vibratorManager = getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
-        val vibrator = vibratorManager.defaultVibrator
-        vibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+        vibratorManager.defaultVibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
 
         // get a random response, adjust probabilities based on the avg force if needed
         currentResponse =
@@ -131,10 +139,13 @@ class ToyService: Service() {
 
     override fun onCreate() {
         super.onCreate()
+
         positiveResponses = resources.getStringArray(R.array.positive_responses).toList()
         neutralResponses = resources.getStringArray(R.array.neutral_responses).toList()
         negativeResponses = resources.getStringArray(R.array.negative_responses).toList()
         stronkResponses = resources.getStringArray(R.array.stronk_responses).toList()
+
+        vibratorManager = getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
     }
 
     override fun onBind(intent: Intent?): IBinder {
@@ -145,7 +156,6 @@ class ToyService: Service() {
             onShakeEnd = { avgForce -> onShakeEnd(avgForce) }
         ).apply {
             register()
-            activate()
         }
 
         orientationDetector = OrientationDetector(
@@ -183,7 +193,13 @@ class ToyService: Service() {
     }
 
     private fun drawPreview() {
-        //TODO: draw 8Ball preview
+        val obj = GlyphMatrixObject.Builder()
+            .setImageSource(previewBitmap)
+            .setPosition(0, 0)
+            .build()
+
+        val frame = GlyphMatrixFrame.Builder().addTop(obj).build(applicationContext)
+        mGM?.setMatrixFrame(frame.render())
     }
 
     private fun drawResponse(response: String) {
@@ -220,4 +236,5 @@ class ToyService: Service() {
             e.printStackTrace()
         }
     }
+
 }

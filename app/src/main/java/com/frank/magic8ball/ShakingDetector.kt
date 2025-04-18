@@ -7,13 +7,25 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import kotlin.math.abs
 
+/**
+ * A class to detect shaking motion using accelerometer sensors.
+ * It observes sensor events to determine the start and end of a shake gesture
+ * based on configurable thresholds. It ensures proper handling of sensor listener
+ * registration and state management.
+ *
+ * @param context The application context used to access the sensor service.
+ * @param onShakeStart A callback triggered when the shaking is initiated.
+ * @param onShakeEnd A callback triggered with the average shake force when shaking ends.
+ *
+ * @author Fr4nKB
+ */
 class ShakingDetector(
     private val context: Context,
     private val onShakeStart: () -> Unit = {},
     private val onShakeEnd: (Double) -> Unit = {}
 ) {
     private lateinit var sensorEventListener: SensorEventListener
-    private var isActive by SynchronizedFlag(false)
+    private var isActive by SynchronizedFlag(false) // ensure thread safety
 
     companion object {
         const val TAG = "Magic8Ball:ShakingDetector"
