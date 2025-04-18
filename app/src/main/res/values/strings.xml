@@ -1,0 +1,44 @@
+<resources>
+    <string name="app_name">Magic8Ball</string>
+
+    <string-array name="positive_responses">
+        <item>YES</item>
+        <item>NO DOUBT</item>
+        <item>MOST LIKELY</item> <!--too long-->
+        <item>FATE SAYS YES</item>
+        <item>IT IS TIME</item>
+        <item>SURE</item>
+        <item>INDEED</item> <!--too long-->
+        <item>100%</item>
+    </string-array>
+
+    <string-array name="neutral_responses">
+        <item>MAYBE</item>
+        <item>NO IDEA</item>
+        <item>ASK LATE ...</item>
+        <item>REPLY HAZY</item>
+        <item>NOT SO SURE</item>
+        <item>TOO SOON YET</item>
+        <item>TIME WILL TELL</item>
+        <item>HARD TO TELL</item>
+    </string-array>
+
+    <string-array name="negative_responses">
+        <item>NO</item>
+        <item>DOUBT</item>
+        <item>FORGET IT</item>
+        <item>NO WAY</item>
+        <item>NEVER EVER</item>
+        <item>WON\'T WORK</item>
+        <item>NOT TODAY</item>
+        <item>NAH</item>
+    </string-array>
+
+    <string-array name="stronk_responses">
+        <item>WHOA SLOW PAL</item>
+        <item>EASY NOW BUD</item>
+        <item>TAKE IT EASY</item>
+        <item>COOL IT MATE</item>
+    </string-array>
+
+</resources>

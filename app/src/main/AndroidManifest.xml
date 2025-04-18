@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Required to access Glyph interface -->
+    <uses-permission android:name="com.nothing.ketchum.permission.ENABLE"/>
+
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Magic8Ball">
+
+        <!-- API key -->
+        <meta-data android:name="NothingKey" android:value="test"/>
+
+        <service android:name="com.frank.magic8ball.ToyService"
+            android:exported="true">
+
+            <intent-filter>
+                <action android:name="com.nothing.glyph.TOY"/>
+            </intent-filter>
+
+            <!-- Required, otherwise your toy will not be display in manager list -->
+            <meta-data
+                android:name="com.nothing.glyph.toy.name"
+                android:resource="@string/app_name"/>
+
+            <!-- Required, allows users to preview your toy -->
+            <meta-data
+                android:name="com.nothing.glyph.toy.image"
+                android:resource="@drawable/ic_launcher_background"/>
+
+        </service>
+
+    </application>
+
+</manifest>
