@@ -3,7 +3,6 @@ package com.frank.magic8ball
 import android.app.Service
 import android.content.ComponentName
 import android.content.Intent
-import android.media.MediaPlayer
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
@@ -39,12 +38,13 @@ class ToyService: Service() {
     private lateinit var positiveResponses: List<String>
     private lateinit var neutralResponses: List<String>
     private lateinit var negativeResponses: List<String>
-    private lateinit var stronkResponses: List<String>
+    private lateinit var strongResponses: List<String>
 
     private val previewBitmap = createPreviewBitmap(MATRIX_DIMENSION)
     private var highlightedTokenIndex = 0
     private var currentResponse: String = ""
 
+    private lateinit var soundEffectPlayer: SoundEffectPlayer
     private lateinit var vibratorManager: VibratorManager
 
     // getting a positive or negative response is influenced by the force applied to the shake
@@ -55,13 +55,15 @@ class ToyService: Service() {
         const val TAG = "Magic8Ball:ToyService"
 
         const val MATRIX_DIMENSION = 25
-
+        const val LOW_BRIGHTNESS = 100
+        const val MAX_BRIGHTNESS = 255
+        
         const val MIN_PROBABILITY_THRESHOLD = 20
         const val DEFAULT_PROBABILITY_THRESHOLD = 33
         const val MAX_PROBABILITY_THRESHOLD = 47
 
-        const val LOW_BRIGHTNESS = 100
-        const val MAX_BRIGHTNESS = 255
+        const val SHAKE_FORCE_BOUNDARY = 5f
+        const val TOO_HIGH_FORCE_THRESHOLD = 10f
     }
 
     private val serviceHandler: Handler = object : Handler(Looper.getMainLooper()) {
@@ -101,24 +103,15 @@ class ToyService: Service() {
 
     private fun onShakeEnd(avgForce: Double) {
         shakingDetector.deactivate()    // temporarily deactivate shaking detection
-
-        MediaPlayer.create(this, R.raw.slosh_slow).apply {
-            setVolume(0.25f, 0.25f)
-            setOnCompletionListener {
-                reset()
-                release()
-            }
-            start()
-        }
-
+        soundEffectPlayer.stopSound()   // stop sloshing sound effect
         vibratorManager.defaultVibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
 
         // get a random response, adjust probabilities based on the avg force if needed
         currentResponse =
-            if(avgForce >= 10) stronkResponses.random()
+            if(avgForce >= TOO_HIGH_FORCE_THRESHOLD) strongResponses.random()
             else {
                 probabilityThreshold =
-                    if(avgForce > 5f) max(DEFAULT_PROBABILITY_THRESHOLD - avgForce.toInt(), MIN_PROBABILITY_THRESHOLD)
+                    if(avgForce > SHAKE_FORCE_BOUNDARY) max(DEFAULT_PROBABILITY_THRESHOLD - avgForce.toInt(), MIN_PROBABILITY_THRESHOLD)
                     else min(DEFAULT_PROBABILITY_THRESHOLD + avgForce.toInt(), MAX_PROBABILITY_THRESHOLD)
 
                 getRndResponse()
@@ -143,8 +136,9 @@ class ToyService: Service() {
         positiveResponses = resources.getStringArray(R.array.positive_responses).toList()
         neutralResponses = resources.getStringArray(R.array.neutral_responses).toList()
         negativeResponses = resources.getStringArray(R.array.negative_responses).toList()
-        stronkResponses = resources.getStringArray(R.array.stronk_responses).toList()
+        strongResponses = resources.getStringArray(R.array.stronk_responses).toList()
 
+        soundEffectPlayer = SoundEffectPlayer(this, listOf(R.raw.slosh_1,R.raw.slosh_2,R.raw.slosh_3) , SHAKE_FORCE_BOUNDARY)
         vibratorManager = getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
     }
 
@@ -153,6 +147,11 @@ class ToyService: Service() {
 
         shakingDetector = ShakingDetector(
             applicationContext,
+            onShakeStart = { soundEffectPlayer.startSound() },
+            onShake = { intensity ->
+                soundEffectPlayer.adjustSound(intensity.toFloat())
+            },
+            onShakeReset = { soundEffectPlayer.stopSound() },
             onShakeEnd = { avgForce -> onShakeEnd(avgForce) }
         ).apply {
             register()
@@ -176,6 +175,7 @@ class ToyService: Service() {
 
         shakingDetector.unregister(applicationContext)
         orientationDetector.unregister(applicationContext)
+        soundEffectPlayer.stopSound()
         return false
     }
 

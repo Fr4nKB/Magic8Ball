@@ -15,6 +15,8 @@ import kotlin.math.abs
  *
  * @param context The application context used to access the sensor service.
  * @param onShakeStart A callback triggered when the shaking is initiated.
+ * @param onShake A callback triggered when the shake is already initiated and a shake motion is detected.
+ * @param onShakeReset A callback triggered when shake was initiated but did not meet the thresholds.
  * @param onShakeEnd A callback triggered with the average shake force when shaking ends.
  *
  * @author Fr4nKB
@@ -22,6 +24,8 @@ import kotlin.math.abs
 class ShakingDetector(
     private val context: Context,
     private val onShakeStart: () -> Unit = {},
+    private val onShake: (Double) -> Unit = {},
+    private val onShakeReset: () -> Unit = {},
     private val onShakeEnd: (Double) -> Unit = {}
 ) {
     private lateinit var sensorEventListener: SensorEventListener
@@ -32,76 +36,106 @@ class ShakingDetector(
         const val SHAKE_FORCE_THRESHOLD = 1.0
         const val ON_START_THRESHOLD = 3
         const val ON_END_THRESHOLD = 10
-        const val NUM_SAMPLE_THRESHOLD = 30
+        const val SLIDING_WINDOW_SAMPLES = 5
+        const val NUM_SAMPLES_THRESHOLD = 30
     }
 
     fun register() {
         val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
 
         sensorEventListener = object : SensorEventListener {
-            // hold sensor values of the previous event
+            // previous sensor values
             private var lastX = 0f
             private var lastY = 0f
+            private var lastZ = 0f
 
-            private var values: MutableList<Float> = mutableListOf()
+            // shake-related state variables
+            private var avgShakeForce = 0.0
+            private val slidingWindow = ArrayDeque<Float>()
             private var isShaking = false
             private var consecutiveNumShakeEvents = 0
             private var consecutiveNumStillEvents = 0
+
+            // calculates moving average from sliding window
+            private fun calculateMovingAverage(newSample: Float): Double {
+                slidingWindow.addLast(newSample)
+
+                // remove oldest sample if queue exceeds window size
+                if(slidingWindow.size > SLIDING_WINDOW_SAMPLES) {
+                    slidingWindow.removeFirst()
+                }
+
+                return slidingWindow.average()
+            }
 
             override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {}
 
             override fun onSensorChanged(event: SensorEvent) {
                 if(!isActive) {
-                    consecutiveNumShakeEvents = 0
-                    consecutiveNumStillEvents = 0
-                    values.clear()
-                    isShaking = false
+                    resetStateVariables()
                     return
                 }
 
                 if(event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
                     val x = event.values[0]
                     val y = event.values[1]
+                    val z = event.values[2]
 
-                    // calculate the force of shake
                     val deltaX = x - lastX
                     val deltaY = y - lastY
-                    val shakeForce = abs(deltaX + deltaY)
+                    val deltaZ = z - lastZ
+                    val shakeForce = abs(deltaX + deltaY + deltaZ)
 
                     lastX = x
                     lastY = y
+                    lastZ = z
 
-                    if(shakeForce > SHAKE_FORCE_THRESHOLD) {
-                        // count consecutive shake events
-                        consecutiveNumShakeEvents += 1
-                        consecutiveNumStillEvents = 0
+                    // handle shake detection logic
+                    handleShakeDetection(shakeForce)
+                }
+            }
 
-                        if(consecutiveNumShakeEvents >= ON_START_THRESHOLD) {
-                            if(!isShaking) {
-                                isShaking = true
-                                onShakeStart()  // called only once
-                            }
+            private fun handleShakeDetection(shakeForce: Float) {
+                if(shakeForce > SHAKE_FORCE_THRESHOLD) {
+                    consecutiveNumShakeEvents += 1
+                    consecutiveNumStillEvents = 0
 
-                            // add values to the list for later postprocessing
-                            values.add(shakeForce)
+                    if(consecutiveNumShakeEvents >= ON_START_THRESHOLD) {
+                        if(!isShaking) {
+                            isShaking = true
+                            onShakeStart() // called only once
                         }
-                    }
-                    else {
-                        if(isShaking) {
-                            consecutiveNumStillEvents += 1
 
-                            if(consecutiveNumStillEvents >= ON_END_THRESHOLD) {
-                                if(values.size >= NUM_SAMPLE_THRESHOLD) onShakeEnd(values.average())
+                        // online avg
+                        val numRecordedSamples = consecutiveNumShakeEvents - ON_START_THRESHOLD - 1
+                        if(numRecordedSamples == 1) avgShakeForce = shakeForce.toDouble()   // avoid NaN values
+                        else avgShakeForce += (shakeForce - avgShakeForce) / numRecordedSamples
 
-                                // reset state variables
-                                consecutiveNumShakeEvents = 0
-                                consecutiveNumStillEvents = 0
-                                values.clear()
-                                isShaking = false
-                            }
-                        }
+                        onShake(calculateMovingAverage(shakeForce)) // moving avg
                     }
                 }
+                else handleStillDetection()
+            }
+
+            private fun handleStillDetection() {
+                if(isShaking) {
+                    consecutiveNumStillEvents += 1
+
+                    if(consecutiveNumStillEvents >= ON_END_THRESHOLD) {
+                        if(consecutiveNumShakeEvents >= NUM_SAMPLES_THRESHOLD) onShakeEnd(avgShakeForce)
+                        else onShakeReset()
+
+                        resetStateVariables()
+                    }
+                }
+            }
+
+            private fun resetStateVariables() {
+                consecutiveNumShakeEvents = 0
+                consecutiveNumStillEvents = 0
+                avgShakeForce = 0.0
+                slidingWindow.clear()
+                isShaking = false
             }
         }
 

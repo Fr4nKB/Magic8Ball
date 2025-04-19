@@ -34,7 +34,8 @@ object Util {
         }
 
         return tokens.mapIndexed { index, token ->
-            middlePoints[index] - ((token.toList().count() / 2.0) * letterWidth).roundToInt()
+            val halfWordDimPx = ((token.toList().count() / 2.0) * letterWidth).roundToInt()
+            (middlePoints[index] - halfWordDimPx).coerceAtLeast(0)
         }
     }
 
