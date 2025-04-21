@@ -35,9 +35,9 @@ class ShakingDetector(
         const val TAG = "Magic8Ball:ShakingDetector"
         const val SHAKE_FORCE_THRESHOLD = 1.0
         const val ON_START_THRESHOLD = 3
-        const val ON_END_THRESHOLD = 10
+        const val ON_END_THRESHOLD = 6
         const val SLIDING_WINDOW_SAMPLES = 5
-        const val NUM_SAMPLES_THRESHOLD = 30
+        const val NUM_SAMPLES_THRESHOLD = 20
     }
 
     fun register() {
@@ -143,7 +143,7 @@ class ShakingDetector(
         sensorManager.registerListener(
             sensorEventListener,
             sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
-            SensorManager.SENSOR_DELAY_NORMAL
+            SensorManager.SENSOR_DELAY_UI
         )
     }
 

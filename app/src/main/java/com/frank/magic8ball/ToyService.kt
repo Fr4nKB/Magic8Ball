@@ -55,15 +55,17 @@ class ToyService: Service() {
         const val TAG = "Magic8Ball:ToyService"
 
         const val MATRIX_DIMENSION = 25
-        const val LOW_BRIGHTNESS = 100
+        const val LOW_BRIGHTNESS = 50
         const val MAX_BRIGHTNESS = 255
         
         const val MIN_PROBABILITY_THRESHOLD = 20
         const val DEFAULT_PROBABILITY_THRESHOLD = 33
         const val MAX_PROBABILITY_THRESHOLD = 47
 
-        const val SHAKE_FORCE_BOUNDARY = 5f
-        const val TOO_HIGH_FORCE_THRESHOLD = 10f
+        const val SHAKE_FORCE_BOUNDARY = 14f
+        const val TOO_HIGH_FORCE_THRESHOLD = 28f
+
+        const val PITCH_THRESHOLD = 5.0
     }
 
     private val serviceHandler: Handler = object : Handler(Looper.getMainLooper()) {
@@ -117,17 +119,31 @@ class ToyService: Service() {
                 getRndResponse()
             }
 
-        highlightedTokenIndex = currentResponse.split(" ").size/2
+        highlightedTokenIndex = currentResponse.split(" ").size / 2
         drawResponse(currentResponse)
         orientationDetector.activate()
     }
 
     private fun highLightToken(pitch: Double) {
-        highlightedTokenIndex =
-            if(pitch > 0) max(highlightedTokenIndex - 1, 0)
-            else min(highlightedTokenIndex + 1, currentResponse.split(" ").size - 1)
+        val numTokens = currentResponse.split(" ").size
+        val previousIndex = highlightedTokenIndex
 
-        drawResponse(currentResponse)
+        // change which token is highlighted based on pitch angle
+        highlightedTokenIndex =
+            if(pitch > PITCH_THRESHOLD) max(highlightedTokenIndex - 1, 0)
+            else if(pitch < -PITCH_THRESHOLD)  min(highlightedTokenIndex + 1, numTokens - 1)
+            else {
+                when(numTokens) {
+                    2 -> highlightedTokenIndex
+                    3 -> 1
+                    else -> 0
+                }
+            }
+
+        if(highlightedTokenIndex != previousIndex) {
+            vibratorManager.defaultVibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+            drawResponse(currentResponse)
+        }
     }
 
     override fun onCreate() {
@@ -147,19 +163,27 @@ class ToyService: Service() {
 
         shakingDetector = ShakingDetector(
             applicationContext,
-            onShakeStart = { soundEffectPlayer.startSound() },
+            onShakeStart = {
+                soundEffectPlayer.startSound()
+            },
             onShake = { intensity ->
                 soundEffectPlayer.adjustSound(intensity.toFloat())
             },
-            onShakeReset = { soundEffectPlayer.stopSound() },
-            onShakeEnd = { avgForce -> onShakeEnd(avgForce) }
+            onShakeReset = {
+                soundEffectPlayer.stopSound()
+            },
+            onShakeEnd = { avgForce ->
+                onShakeEnd(avgForce)
+            }
         ).apply {
             register()
         }
 
         orientationDetector = OrientationDetector(
             applicationContext,
-            onOrientationChange = { pitch -> highLightToken(pitch)}
+            onOrientationChange = { pitch ->
+                highLightToken(pitch)
+            }
         ).apply {
             register()
         }

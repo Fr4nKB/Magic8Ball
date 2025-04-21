@@ -5,7 +5,6 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import kotlin.math.atan2
 
 /**
  * A class for detecting orientation changes using gyroscope sensors.
@@ -26,30 +25,27 @@ class OrientationDetector(
 
     companion object {
         const val TAG = "Magic8Ball:OrientationDetector"
-        const val ORIENTATION_CHANGE_THRESHOLD = 10
     }
 
     fun register() {
         val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
 
         sensorEventListener = object : SensorEventListener {
-            private val alpha = 0.8f // smoothing factor
-            private var smoothedValues = DoubleArray(10) // stores smoothed gyroscope values
-
             override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {}
 
             override fun onSensorChanged(event: SensorEvent) {
                 if(!isActive) return
 
-                if(event.sensor.type == Sensor.TYPE_GYROSCOPE) {
-                    for(i in event.values.indices) {    // low-pass filter
-                        smoothedValues[i] = alpha * smoothedValues[i] + (1 - alpha) * event.values[i]
-                    }
+                if(event.sensor.type == Sensor.TYPE_ROTATION_VECTOR) {
+                    val rotationMatrix = FloatArray(9)
+                    val orientationValues = FloatArray(3)
 
-                    val pitch = Math.toDegrees(atan2(-smoothedValues[0], smoothedValues[9]))
+                    // convert rotation vector to rotation matrix and get orientation
+                    SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
+                    SensorManager.getOrientation(rotationMatrix, orientationValues)
 
-                    if(pitch > ORIENTATION_CHANGE_THRESHOLD) onOrientationChange(pitch)   // forward tilt
-                    else if (pitch < -ORIENTATION_CHANGE_THRESHOLD) onOrientationChange(pitch)    // backward tilt
+                    val pitch = Math.toDegrees(orientationValues[1].toDouble())
+                    onOrientationChange(pitch)
                 }
             }
         }
@@ -57,8 +53,8 @@ class OrientationDetector(
         unregister(context)   // ensure only one listener is active
         sensorManager.registerListener(
             sensorEventListener,
-            sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE),
-            SensorManager.SENSOR_DELAY_NORMAL
+            sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR),
+            SensorManager.SENSOR_DELAY_UI
         )
     }
 
