@@ -24,7 +24,7 @@ class SoundEffectPlayer(
     private var streamId: Int = -1
 
     companion object {
-        const val MAX_VOLUME = 0.2f
+        const val MAX_VOLUME = 0.25f
     }
 
     fun startSound() {

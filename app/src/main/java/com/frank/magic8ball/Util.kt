@@ -7,11 +7,13 @@ import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.Shader
 import androidx.core.graphics.createBitmap
+import com.nothing.ketchum.GlyphMatrixFrame
+import com.nothing.ketchum.GlyphMatrixObject
 import kotlin.math.roundToInt
 
 object Util {
     // used to center text vertically
-    fun rowCoordinates(numTokens: Int): List<Int> {
+    private fun rowCoordinates(numTokens: Int): List<Int> {
         return when(numTokens) {
             1 -> listOf(9)
             2 -> listOf(6, 12)
@@ -21,7 +23,7 @@ object Util {
     }
 
     // used to center text horizontally
-    fun colCoordinates(tokens: List<String>): List<Int> {
+    private fun colCoordinates(tokens: List<String>): List<Int> {
         // each letter is 4px wide on avg and each letter is spaced by 1 px
         // decrease from middle point by 5px for each letter
         val letterWidth = 5
@@ -69,5 +71,55 @@ object Util {
         canvas.drawCircle(center, center + center / 2 - 3, center / 2 - 3, blackPaint)
 
         return bitmap
+    }
+
+    /**
+     * Given a string, creates a GlyphMatrixFrame.Builder object containing each word in the string
+     * centered vertically and horizontally.
+     *
+     * @param text the string to display
+     * @param highlightedTokenIndex the word to highlight, -1 all words should be highlighted
+     * @param lowBrightness the brightness level for non-highlighted words (default 5)
+     * @param maxBrightness the brightness level for the highlighted word (default 255)
+     *
+     * @return GlyphMatrixFrame.Builder object containing the centered and optionally highlighted string
+     *
+     * @author Fr4nKB
+     */
+    fun createFrameBuilderWithCenteredText(
+        text: String,
+        highlightedTokenIndex: Int = -1,
+        lowBrightness: Int = 5,
+        maxBrightness: Int = 255
+    ): GlyphMatrixFrame.Builder {
+        val tokens = text.split(" ")
+        val numTokens = tokens.size
+
+        // get tokens' coordinates in order to be centered
+        // based on number of tokens and single token size
+        val rowCoordinates = rowCoordinates(numTokens)
+        val colCoordinates = colCoordinates(tokens)
+
+        val frameBuilder = GlyphMatrixFrame.Builder()
+
+        tokens.forEachIndexed { index, token ->
+            val brightness =
+                if(highlightedTokenIndex == -1 || index == highlightedTokenIndex) maxBrightness
+                else lowBrightness
+
+            val obj = GlyphMatrixObject.Builder()
+                .setText(token)
+                .setPosition(colCoordinates[index], rowCoordinates[index])
+                .setBrightness(brightness)
+                .build()
+
+            when(index) {
+                0 -> frameBuilder.addTop(obj)
+                1 -> frameBuilder.addMid(obj)
+                2 -> frameBuilder.addLow(obj)
+            }
+        }
+
+        return frameBuilder
     }
 }

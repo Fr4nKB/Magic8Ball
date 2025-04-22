@@ -33,7 +33,7 @@ class ShakingDetector(
 
     companion object {
         const val TAG = "Magic8Ball:ShakingDetector"
-        const val SHAKE_FORCE_THRESHOLD = 1.0
+        const val SHAKE_FORCE_THRESHOLD = 0.5
         const val ON_START_THRESHOLD = 3
         const val ON_END_THRESHOLD = 6
         const val SLIDING_WINDOW_SAMPLES = 5

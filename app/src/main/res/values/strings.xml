@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">Magic8Ball</string>
+    <string name="shake">shake</string>
 
     <string-array name="positive_responses">
         <item>YES</item>
@@ -26,7 +27,7 @@
     <string-array name="negative_responses">
         <item>NO</item>
         <item>DOUBT</item>
-        <item>FORGET IT</item>
+        <item>FORGET IT</item> <!--too long-->
         <item>NO WAY</item>
         <item>NEVER EVER</item>
         <item>WON\'T WORK</item>
@@ -34,7 +35,7 @@
         <item>NAH</item>
     </string-array>
 
-    <string-array name="stronk_responses">
+    <string-array name="strong_responses">
         <item>WHOA SLOW PAL</item>
         <item>EASY NOW BUD</item>
         <item>TAKE IT EASY</item>
