@@ -41,6 +41,25 @@ object Util {
         }
     }
 
+    fun createLoadingResponseBitmap(dimension: Int, boundary: Float = 0.4f): Bitmap {
+        val bitmap = createBitmap(dimension, dimension)
+        val canvas = Canvas(bitmap)
+        val center = dimension / 2f
+
+        val gradientPaint = Paint().apply {
+            shader = RadialGradient(
+                center, center,
+                dimension.toFloat(), // radius
+                intArrayOf(Color.BLACK, Color.BLACK, Color.WHITE), // black starts from center, stay black, finishes with white
+                floatArrayOf(0f, boundary, 1f), // black until boundary (%) then starts becoming white
+                Shader.TileMode.CLAMP // avoid repeating patterns
+            )
+        }
+
+        canvas.drawCircle(center, center, center, gradientPaint)
+        return bitmap
+    }
+
     fun createPreviewBitmap(dimension: Int): Bitmap {
         val bitmap = createBitmap(dimension, dimension)
         val canvas = Canvas(bitmap)
@@ -51,9 +70,9 @@ object Util {
             shader = RadialGradient(
                 center,
                 center,
-                center, // radius
-                Color.GRAY, // start color (center)
-                Color.BLACK, // end color (edges)
+                dimension.toFloat(), // radius
+                intArrayOf(Color.WHITE, Color.WHITE, Color.BLACK), // white starts from center, stay white, finishes with black
+                floatArrayOf(0f, 0.36f, 1f), // white until 36% of the way then starts becoming black
                 Shader.TileMode.CLAMP // avoid repeating patterns
             )
         }
@@ -66,7 +85,7 @@ object Util {
 
         canvas.drawCircle(center, center, center, gradientPaint)
 
-        // draw an 8, two black circles and two other inner white circle
+        // draw an 8, two black circles with a hole in it
         canvas.drawCircle(center, center - center / 2 + 3, center / 2 - 3, blackPaint)
         canvas.drawCircle(center, center + center / 2 - 3, center / 2 - 3, blackPaint)
 

@@ -5,11 +5,11 @@
     <string-array name="positive_responses">
         <item>YES</item>
         <item>NO DOUBT</item>
-        <item>MOST LIKELY</item> <!--too long-->
+        <item>SAFE BET</item>
         <item>FATE SAYS YES</item>
         <item>IT IS TIME</item>
         <item>SURE</item>
-        <item>INDEED</item> <!--too long-->
+        <item>WHY NOT</item>
         <item>100%</item>
     </string-array>
 
@@ -27,7 +27,7 @@
     <string-array name="negative_responses">
         <item>NO</item>
         <item>DOUBT</item>
-        <item>FORGET IT</item> <!--too long-->
+        <item>GIVE UP</item>
         <item>NO WAY</item>
         <item>NEVER EVER</item>
         <item>WON\'T WORK</item>

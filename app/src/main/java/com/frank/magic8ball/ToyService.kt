@@ -24,12 +24,17 @@ import com.frank.magic8ball.Constants.NUM_UNLOCKS_NEUTRAL
 import com.frank.magic8ball.Constants.NUM_UNLOCKS_POSITIVE
 import com.frank.magic8ball.Constants.SHARED_PREF_KEY
 import com.frank.magic8ball.Util.createFrameBuilderWithCenteredText
+import com.frank.magic8ball.Util.createLoadingResponseBitmap
 import com.frank.magic8ball.Util.createPreviewBitmap
 import com.nothing.ketchum.Glyph
 import com.nothing.ketchum.GlyphMatrixFrame
 import com.nothing.ketchum.GlyphMatrixManager
 import com.nothing.ketchum.GlyphMatrixObject
 import com.nothing.ketchum.GlyphToy
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
@@ -53,10 +58,13 @@ class ToyService: Service() {
     private lateinit var orientationDetector: OrientationDetector
 
     private var isStarted = false
+    private var isAnimating by SynchronizedFlag(false)
+
     private lateinit var neutralResponses: List<String>
     private lateinit var positiveResponses: List<String>
     private lateinit var negativeResponses: List<String>
     private lateinit var strongResponses: List<String>
+    private var loadingAnimationFrames: MutableList<Bitmap> = mutableListOf()
 
     private val previewBitmap = createPreviewBitmap(MATRIX_DIMENSION)
     private var highlightedTokenIndex = 0
@@ -99,12 +107,12 @@ class ToyService: Service() {
         private const val PITCH_THRESHOLD = 5.0
 
         private const val START_TIME_POSITIVE = "07:00:00"
-        private const val END_TIME_POSITIVE = "18:00:00"
+        private const val END_TIME_POSITIVE = "8:00:00"
 
-        private const val START_TIME_NEUTRAL = "01:00:00"
-        private const val END_TIME_NEUTRAL = "18:00:00"
+        private const val START_TIME_NEUTRAL = "12:00:00"
+        private const val END_TIME_NEUTRAL = "13:00:00"
 
-        private const val START_TIME_NEGATIVE = "03:00:00"
+        private const val START_TIME_NEGATIVE = "23:00:00"
         private const val END_TIME_NEGATIVE = "00:00:00"
     }
 
@@ -114,7 +122,7 @@ class ToyService: Service() {
         val endTime = LocalTime.parse(end)
 
         return if (endTime.isBefore(startTime)) {
-            // Interval spans midnight
+            // interval spans midnight
             currentTime.isAfter(startTime) || currentTime.isBefore(endTime)
         }
         else currentTime.isAfter(startTime) && currentTime.isBefore(endTime)
@@ -200,9 +208,7 @@ class ToyService: Service() {
         }
 
         // update consecutive category counter
-        if(prevResponseCategory != category) {
-            consecutiveResponses = 1
-        }
+        if(prevResponseCategory != category) consecutiveResponses = 1
         else consecutiveResponses += 1
 
         prevResponseCategory = category
@@ -269,35 +275,44 @@ class ToyService: Service() {
         soundEffectPlayer.stopSound()   // stop sloshing sound effect
         vibratorManager.defaultVibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
 
-        // get a random response, adjust probabilities based on the avg force if needed
-        currentResponse =
-            if(avgForce >= TOO_HIGH_FORCE_THRESHOLD) strongResponses.random()
+        drawLoadingAnimation {
+            // get a random response, adjust probabilities based on the avg force if needed
+            if(avgForce >= TOO_HIGH_FORCE_THRESHOLD) {
+                currentResponse = strongResponses.random()
+                highlightedTokenIndex = currentResponse.split(" ").size / 2
+                drawResponseWithFadeIn(currentResponse) {
+                    orientationDetector.activate()
+                }
+            }
             else {
                 updateProbabilities(avgForce)
 
                 val (rndCategory, newUnlockBitmap) = drawRndCategory()
                 if(newUnlockBitmap != null) {
-                    drawBitmap(newUnlockBitmap)
-                    return
+                    drawBitmapWithFadeIn(newUnlockBitmap)
+                    return@drawLoadingAnimation
                 }
 
                 val response = getRndResponse(rndCategory)
                 when(response) {
-                    is String -> response
-                    is Bitmap -> {
-                        drawBitmap(response)
-                        return
+                    is String -> {
+                        currentResponse = response
+                        highlightedTokenIndex = currentResponse.split(" ").size / 2
+                        drawResponseWithFadeIn(response) {
+                            orientationDetector.activate()
+                        }
+
                     }
-                    else -> return
+                    is Bitmap -> drawBitmapWithFadeIn(response)
+                    else -> {}
                 }
             }
-
-        highlightedTokenIndex = currentResponse.split(" ").size / 2
-        drawResponse(currentResponse)
-        orientationDetector.activate()
+        }
     }
 
     private fun highLightToken(pitch: Double) {
+        if(isAnimating) return
+
         val numTokens = currentResponse.split(" ").size
         val previousIndex = highlightedTokenIndex
 
@@ -332,6 +347,13 @@ class ToyService: Service() {
         neutralResponses = resources.getStringArray(R.array.neutral_responses).toList()
         negativeResponses = resources.getStringArray(R.array.negative_responses).toList()
         strongResponses = resources.getStringArray(R.array.strong_responses).toList()
+
+        // create the load animation frames once so they can be reused
+        for(i in 0 until 10) {
+            loadingAnimationFrames.add(
+                createLoadingResponseBitmap(MATRIX_DIMENSION, 0.45f - i/100f)
+            )
+        }
 
         soundEffectPlayer = SoundEffectPlayer(this, listOf(R.raw.slosh_1,R.raw.slosh_2,R.raw.slosh_3) , SHAKE_FORCE_BOUNDARY)
         vibratorManager = getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
@@ -397,14 +419,66 @@ class ToyService: Service() {
         mGM?.init(mCallback)
     }
 
-    private fun drawBitmap(bitmap: Bitmap) {
+    private fun drawLoadingAnimation(onEnd: () -> Unit) {
+        if(isAnimating) return
+        isAnimating = true
+
+        val frameDurationMs = listOf(70L, 100L, 115L).random()
+        val numberOfRepetitions = Random.nextInt(1, 3)
+
+        CoroutineScope(Dispatchers.Main).launch {
+            val numFrames = loadingAnimationFrames.size
+
+            var numRep = 0
+            var index = 0
+            var reverse = false
+
+            while(true) {
+                drawBitmap(loadingAnimationFrames[index], MAX_BRIGHTNESS * (index + 1) / numFrames)
+
+                if(reverse && index == 0) {
+                    numRep += 1
+                    reverse = false
+                }
+                else if(!reverse && index == loadingAnimationFrames.size - 1) reverse = true
+
+                if(numRep >= numberOfRepetitions) break
+
+                if(reverse) index -= 1
+                else index += 1
+
+                delay(frameDurationMs)
+            }
+
+            isAnimating = false
+            onEnd()
+        }
+    }
+
+    private fun drawBitmap(bitmap: Bitmap, brightness: Int = MAX_BRIGHTNESS) {
         val obj = GlyphMatrixObject.Builder()
             .setImageSource(bitmap)
             .setPosition(0, 0)
+            .setBrightness(brightness)
             .build()
 
         val frame = GlyphMatrixFrame.Builder().addTop(obj).build(applicationContext)
         mGM?.setMatrixFrame(frame.render())
+    }
+
+    private fun drawBitmapWithFadeIn(bitmap: Bitmap) {
+        if(isAnimating) return
+
+        CoroutineScope(Dispatchers.Main).launch {
+            isAnimating = true
+
+            for(i in 0 until 10) {
+                drawBitmap(bitmap, MAX_BRIGHTNESS * (i + 1) / 25)
+                delay(40L)
+            }
+
+            isAnimating = false
+        }
     }
 
     private fun drawResponse(response: String) {
@@ -413,26 +487,44 @@ class ToyService: Service() {
         mGM?.setMatrixFrame(frame.render())
     }
 
+    private fun drawResponseWithFadeIn(response: String, onEnd: () -> Unit = {}) {
+        if(isAnimating) return
+        isAnimating = true
+
+        CoroutineScope(Dispatchers.Main).launch {
+
+            for(i in 0 until 10) {
+                val frameBuilder = createFrameBuilderWithCenteredText(
+                    response,
+                    highlightedTokenIndex,
+                    LOW_BRIGHTNESS,
+                    if(i == 9) MAX_BRIGHTNESS else MAX_BRIGHTNESS * (i + 1) / 25
+                )
+
+                val frame = frameBuilder.build(applicationContext)
+                mGM?.setMatrixFrame(frame.render())
+
+                delay(50L)
+            }
+
+            isAnimating = false
+            onEnd()
+        }
+    }
+
     private fun onLongPress() {
+        if(isAnimating) return
+
         if(!isStarted) {
             isStarted = true
 
             consecutiveResponses = 0
             prevResponseCategory = -1
-
-            val frameBuilder = createFrameBuilderWithCenteredText(getString(R.string.shake))
-            val frame = frameBuilder.build(applicationContext)
-
-            try {
-                mGM?.setMatrixFrame(frame.render())
-            }
-            catch(e: Exception) {
-                e.printStackTrace()
-            }
         }
-        else {
-            mGM?.turnOff()
-        }
+
+        val frameBuilder = createFrameBuilderWithCenteredText(getString(R.string.shake))
+        val frame = frameBuilder.build(applicationContext)
+        mGM?.setMatrixFrame(frame.render())
 
         shakingDetector.activate()
         orientationDetector.deactivate()

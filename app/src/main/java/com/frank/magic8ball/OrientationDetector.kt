@@ -5,6 +5,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import kotlin.math.abs
 
 /**
  * A class for detecting orientation changes using gyroscope sensors.
@@ -44,7 +45,13 @@ class OrientationDetector(
                     SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
                     SensorManager.getOrientation(rotationMatrix, orientationValues)
 
-                    val pitch = Math.toDegrees(orientationValues[1].toDouble())
+                    var pitch = Math.toDegrees(orientationValues[1].toDouble())
+
+                    // adjust pitch for vertical position
+                    if(abs(pitch) > 45) {
+                        if(pitch > 0) pitch -= 90
+                        else pitch += 90
+                    }
                     onOrientationChange(pitch)
                 }
             }
