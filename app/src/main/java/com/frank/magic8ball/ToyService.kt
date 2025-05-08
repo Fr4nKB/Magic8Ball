@@ -115,7 +115,7 @@ class ToyService: Service() {
         private const val SHIFT_ROLL_THRESHOLD_HIGH = 140.0
 
         private const val START_TIME_POSITIVE = "07:00:00"
-        private const val END_TIME_POSITIVE = "8:00:00"
+        private const val END_TIME_POSITIVE = "08:00:00"
 
         private const val START_TIME_NEUTRAL = "12:00:00"
         private const val END_TIME_NEUTRAL = "13:00:00"
