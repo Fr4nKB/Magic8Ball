@@ -130,7 +130,10 @@ object Util {
 
             val obj = GlyphMatrixObject.Builder()
                 .setText(token)
-                .setPosition(colCoordinates[index] + offsetX, rowCoordinates[index] + offsetY)
+                .setPosition(
+                    colCoordinates[index] + offsetX,
+                    rowCoordinates[index] + offsetY
+                )
                 .setBrightness(brightness)
                 .build()
 

@@ -69,6 +69,7 @@ class ToyService: Service() {
 
     private val previewBitmap = createPreviewBitmap(MATRIX_DIMENSION)
     private var highlightedTokenIndex = 0
+    private var responseDrawn = false
     private var currentResponse: String = ""
     private var offsetX = 0
     private var offsetY = 0
@@ -279,8 +280,6 @@ class ToyService: Service() {
     }
 
     private fun onShakeEnd(avgForce: Double) {
-        shakingDetector.deactivate()    // temporarily deactivate shaking detection
-        soundEffectPlayer.stopSound()   // stop sloshing sound effect
         vibratorManager.defaultVibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
 
         drawLoadingAnimation {
@@ -404,15 +403,19 @@ class ToyService: Service() {
         shakingDetector = ShakingDetector(
             applicationContext,
             onShakeStart = {
+                orientationDetector.deactivate()
                 soundEffectPlayer.startSound()
             },
             onShake = { intensity ->
                 soundEffectPlayer.adjustSound(intensity.toFloat())
             },
             onShakeReset = {
+                if(responseDrawn) orientationDetector.activate()
                 soundEffectPlayer.stopSound()
             },
             onShakeEnd = { avgForce ->
+                responseDrawn = false
+                soundEffectPlayer.stopSound()   // stop sloshing sound effect
                 onShakeEnd(avgForce)
             }
         ).apply {
@@ -518,6 +521,7 @@ class ToyService: Service() {
             }
 
             isAnimating = false
+            responseDrawn = true
         }
     }
 
@@ -563,11 +567,13 @@ class ToyService: Service() {
 
             isAnimating = false
             onEnd()
+
+            responseDrawn = true
         }
     }
 
     private fun onLongPress() {
-        if(isAnimating) return
+        if(isAnimating && isStarted) return
 
         if(!isStarted) {
             isStarted = true
@@ -581,7 +587,6 @@ class ToyService: Service() {
         mGM?.setMatrixFrame(frame.render())
 
         shakingDetector.activate()
-        orientationDetector.deactivate()
     }
 
     private val serviceHandler: Handler = object : Handler(Looper.getMainLooper()) {
