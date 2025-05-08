@@ -108,8 +108,11 @@ class ToyService: Service() {
         private const val TOO_HIGH_FORCE_THRESHOLD = 35f
 
         private const val HIGHLIGHT_PITCH_THRESHOLD = 5.0
-        private const val SHIFT_THRESHOLD_LOW = 30.0
-        private const val SHIFT_THRESHOLD_HIGH = 70.0
+
+        private const val SHIFT_PITCH_THRESHOLD_LOW = 5.0
+        private const val SHIFT_PITCH_THRESHOLD_HIGH = 25.0
+        private const val SHIFT_ROLL_THRESHOLD_LOW = 170.0
+        private const val SHIFT_ROLL_THRESHOLD_HIGH = 140.0
 
         private const val START_TIME_POSITIVE = "07:00:00"
         private const val END_TIME_POSITIVE = "8:00:00"
@@ -345,24 +348,26 @@ class ToyService: Service() {
         }
     }
 
-    private fun updateOffset(data: Double): Int {
-        return when {
-            data <= -SHIFT_THRESHOLD_HIGH -> -2
-            data in -SHIFT_THRESHOLD_HIGH..-SHIFT_THRESHOLD_LOW -> -1
-            data in SHIFT_THRESHOLD_LOW..SHIFT_THRESHOLD_HIGH -> 1
-            data >= SHIFT_THRESHOLD_HIGH -> 2
-            else -> 0
-        }
-    }
-
     private fun shiftText(pitch: Double, roll: Double) {
         if(isAnimating) return
 
         val oldOffsetX = offsetX
-        offsetX = updateOffset(roll)
+        offsetX = when {
+            roll <= -SHIFT_ROLL_THRESHOLD_HIGH -> -2
+            roll in -SHIFT_ROLL_THRESHOLD_HIGH..-SHIFT_ROLL_THRESHOLD_LOW -> -1
+            roll in SHIFT_ROLL_THRESHOLD_LOW..SHIFT_ROLL_THRESHOLD_HIGH -> 1
+            roll >= SHIFT_ROLL_THRESHOLD_HIGH -> 2
+            else -> 0
+        }
 
         val oldOffsetY = offsetY
-        offsetY = updateOffset(pitch)
+        offsetY = when {
+            pitch <= -SHIFT_PITCH_THRESHOLD_HIGH -> -2
+            pitch in -SHIFT_PITCH_THRESHOLD_HIGH..-SHIFT_PITCH_THRESHOLD_LOW -> -1
+            pitch in SHIFT_PITCH_THRESHOLD_LOW..SHIFT_PITCH_THRESHOLD_HIGH -> 1
+            pitch >= SHIFT_PITCH_THRESHOLD_HIGH -> 2
+            else -> 0
+        }
 
         if(offsetX != oldOffsetX || offsetY != oldOffsetY) {
             vibratorManager.defaultVibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
