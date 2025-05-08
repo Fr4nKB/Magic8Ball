@@ -110,9 +110,9 @@ class ToyService: Service() {
         private const val HIGHLIGHT_PITCH_THRESHOLD = 5.0
 
         private const val SHIFT_PITCH_THRESHOLD_LOW = 5.0
-        private const val SHIFT_PITCH_THRESHOLD_HIGH = 25.0
+        private const val SHIFT_PITCH_THRESHOLD_HIGH = 20.0
         private const val SHIFT_ROLL_THRESHOLD_LOW = 170.0
-        private const val SHIFT_ROLL_THRESHOLD_HIGH = 140.0
+        private const val SHIFT_ROLL_THRESHOLD_HIGH = 155.0
 
         private const val START_TIME_POSITIVE = "07:00:00"
         private const val END_TIME_POSITIVE = "08:00:00"
@@ -351,21 +351,20 @@ class ToyService: Service() {
     private fun shiftText(pitch: Double, roll: Double) {
         if(isAnimating) return
 
+        val absRoll = abs(roll)
+        val offset = if(absRoll > SHIFT_ROLL_THRESHOLD_LOW) 0
+        else if(absRoll in SHIFT_ROLL_THRESHOLD_HIGH..SHIFT_ROLL_THRESHOLD_LOW) 1
+        else 2
+
         val oldOffsetX = offsetX
-        offsetX = when {
-            roll <= -SHIFT_ROLL_THRESHOLD_HIGH -> -2
-            roll in -SHIFT_ROLL_THRESHOLD_HIGH..-SHIFT_ROLL_THRESHOLD_LOW -> -1
-            roll in SHIFT_ROLL_THRESHOLD_LOW..SHIFT_ROLL_THRESHOLD_HIGH -> 1
-            roll >= SHIFT_ROLL_THRESHOLD_HIGH -> 2
-            else -> 0
-        }
+        offsetX = if(roll > 0) -offset else offset
 
         val oldOffsetY = offsetY
         offsetY = when {
-            pitch <= -SHIFT_PITCH_THRESHOLD_HIGH -> -2
-            pitch in -SHIFT_PITCH_THRESHOLD_HIGH..-SHIFT_PITCH_THRESHOLD_LOW -> -1
-            pitch in SHIFT_PITCH_THRESHOLD_LOW..SHIFT_PITCH_THRESHOLD_HIGH -> 1
-            pitch >= SHIFT_PITCH_THRESHOLD_HIGH -> 2
+            pitch <= -SHIFT_PITCH_THRESHOLD_HIGH -> 2
+            pitch in -SHIFT_PITCH_THRESHOLD_HIGH..-SHIFT_PITCH_THRESHOLD_LOW -> 1
+            pitch in SHIFT_PITCH_THRESHOLD_LOW..SHIFT_PITCH_THRESHOLD_HIGH -> -1
+            pitch >= SHIFT_PITCH_THRESHOLD_HIGH -> -2
             else -> 0
         }
 
@@ -523,7 +522,14 @@ class ToyService: Service() {
     }
 
     private fun drawResponse(response: String) {
-        val frameBuilder = createFrameBuilderWithCenteredText(response, highlightedTokenIndex, LOW_BRIGHTNESS, MAX_BRIGHTNESS)
+        val frameBuilder = createFrameBuilderWithCenteredText(
+            response,
+            highlightedTokenIndex,
+            LOW_BRIGHTNESS,
+            MAX_BRIGHTNESS,
+            offsetX,
+            offsetY
+        )
         val frame = frameBuilder.build(applicationContext)
         mGM?.setMatrixFrame(frame.render())
     }
