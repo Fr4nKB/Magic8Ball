@@ -109,7 +109,9 @@ object Util {
         text: String,
         highlightedTokenIndex: Int = -1,
         lowBrightness: Int = 5,
-        maxBrightness: Int = 255
+        maxBrightness: Int = 255,
+        offsetX: Int = 0,
+        offsetY: Int = 0
     ): GlyphMatrixFrame.Builder {
         val tokens = text.split(" ")
         val numTokens = tokens.size
@@ -128,7 +130,7 @@ object Util {
 
             val obj = GlyphMatrixObject.Builder()
                 .setText(token)
-                .setPosition(colCoordinates[index], rowCoordinates[index])
+                .setPosition(colCoordinates[index] + offsetX, rowCoordinates[index] + offsetY)
                 .setBrightness(brightness)
                 .build()
 

@@ -39,6 +39,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.random.Random
@@ -69,6 +70,8 @@ class ToyService: Service() {
     private val previewBitmap = createPreviewBitmap(MATRIX_DIMENSION)
     private var highlightedTokenIndex = 0
     private var currentResponse: String = ""
+    private var offsetX = 0
+    private var offsetY = 0
 
     private lateinit var soundEffectPlayer: SoundEffectPlayer
     private lateinit var vibratorManager: VibratorManager
@@ -104,7 +107,9 @@ class ToyService: Service() {
         private const val SHAKE_FORCE_BOUNDARY = 14f
         private const val TOO_HIGH_FORCE_THRESHOLD = 35f
 
-        private const val PITCH_THRESHOLD = 5.0
+        private const val HIGHLIGHT_PITCH_THRESHOLD = 5.0
+        private const val SHIFT_THRESHOLD_LOW = 30.0
+        private const val SHIFT_THRESHOLD_HIGH = 70.0
 
         private const val START_TIME_POSITIVE = "07:00:00"
         private const val END_TIME_POSITIVE = "8:00:00"
@@ -313,13 +318,19 @@ class ToyService: Service() {
     private fun highLightToken(pitch: Double) {
         if(isAnimating) return
 
+        // adjust pitch to handle vertical position
+        val adjustedPitch = if(abs(pitch) > 45) {
+            if(pitch > 0) pitch - 90
+            else pitch + 90
+        } else pitch
+
         val numTokens = currentResponse.split(" ").size
         val previousIndex = highlightedTokenIndex
 
         // change which token is highlighted based on pitch angle
         highlightedTokenIndex =
-            if(pitch > PITCH_THRESHOLD) max(highlightedTokenIndex - 1, 0)
-            else if(pitch < -PITCH_THRESHOLD)  min(highlightedTokenIndex + 1, numTokens - 1)
+            if(adjustedPitch > HIGHLIGHT_PITCH_THRESHOLD) max(highlightedTokenIndex - 1, 0)
+            else if(adjustedPitch < -HIGHLIGHT_PITCH_THRESHOLD)  min(highlightedTokenIndex + 1, numTokens - 1)
             else {
                 when(numTokens) {
                     2 -> highlightedTokenIndex
@@ -334,9 +345,33 @@ class ToyService: Service() {
         }
     }
 
+    private fun updateOffset(data: Double): Int {
+        return when {
+            data <= -SHIFT_THRESHOLD_HIGH -> -2
+            data in -SHIFT_THRESHOLD_HIGH..-SHIFT_THRESHOLD_LOW -> -1
+            data in SHIFT_THRESHOLD_LOW..SHIFT_THRESHOLD_HIGH -> 1
+            data >= SHIFT_THRESHOLD_HIGH -> 2
+            else -> 0
+        }
+    }
+
+    private fun shiftText(pitch: Double, roll: Double) {
+        if(isAnimating) return
+
+        val oldOffsetX = offsetX
+        offsetX = updateOffset(roll)
+
+        val oldOffsetY = offsetY
+        offsetY = updateOffset(pitch)
+
+        if(offsetX != oldOffsetX || offsetY != oldOffsetY) {
+            vibratorManager.defaultVibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+            drawResponse(currentResponse)
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
-
         sharedPreferences = getSharedPreferences(SHARED_PREF_KEY, MODE_PRIVATE)
 
         numUnlocksNeutral = sharedPreferences.getInt(NUM_UNLOCKS_NEUTRAL, 0)
@@ -382,8 +417,9 @@ class ToyService: Service() {
 
         orientationDetector = OrientationDetector(
             applicationContext,
-            onOrientationChange = { pitch ->
+            onOrientationChange = { pitch, roll ->
                 highLightToken(pitch)
+                shiftText(pitch, roll)
             }
         ).apply {
             register()
@@ -494,11 +530,18 @@ class ToyService: Service() {
         CoroutineScope(Dispatchers.Main).launch {
 
             for(i in 0 until 10) {
+                val(brightness, offsetXValue, offsetYValue) = if(i == 9) {
+                    Triple(MAX_BRIGHTNESS, offsetX, offsetY)
+                }
+                else Triple(MAX_BRIGHTNESS * (i + 1) / 25, 0, 0)
+
                 val frameBuilder = createFrameBuilderWithCenteredText(
                     response,
                     highlightedTokenIndex,
                     LOW_BRIGHTNESS,
-                    if(i == 9) MAX_BRIGHTNESS else MAX_BRIGHTNESS * (i + 1) / 25
+                    brightness,
+                    offsetXValue,
+                    offsetYValue
                 )
 
                 val frame = frameBuilder.build(applicationContext)
