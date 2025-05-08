@@ -14,6 +14,7 @@ import android.os.Message
 import android.os.Messenger
 import android.os.VibrationEffect
 import android.os.VibratorManager
+import android.util.Log
 import androidx.core.content.edit
 import com.frank.magic8ball.Constants.LAST_UNLOCK_NEGATIVE
 import com.frank.magic8ball.Constants.LAST_UNLOCK_NEUTRAL
@@ -96,6 +97,9 @@ class ToyService: Service() {
 
     companion object {
         private const val TAG = "Magic8Ball:ToyService"
+
+        lateinit var serviceHandler : Handler
+        lateinit var serviceMessenger : Messenger
 
         private const val LOW_BRIGHTNESS = 5
         private const val MAX_BRIGHTNESS = 255
@@ -401,6 +405,24 @@ class ToyService: Service() {
     override fun onBind(intent: Intent?): IBinder {
         initGDK()
 
+        serviceHandler = Handler(Looper.getMainLooper()) {
+                msg ->
+            when (msg.what) {
+                GlyphToy.MSG_GLYPH_TOY -> {
+                    val bundle: Bundle = msg.getData()
+                    val event = bundle.getString(GlyphToy.MSG_GLYPH_TOY_DATA)
+                    if (GlyphToy.EVENT_CHANGE == event) {
+                        Log.d("ToyServiceDemo", "GlyphToy.EVENT_CHANGE")
+                        //on long press, toggle digits display
+                        onLongPress()
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+        serviceMessenger = Messenger(serviceHandler)
+
         shakingDetector = ShakingDetector(
             applicationContext,
             onShakeStart = {
@@ -428,13 +450,14 @@ class ToyService: Service() {
         ).apply {
             register()
         }
-
+        setWindow(this)
         return serviceMessenger.binder
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
         isStarted = false
 
+        closeWindow()
         mGM?.turnOff()
         mGM?.unInit()
         mGM = null
@@ -503,7 +526,7 @@ class ToyService: Service() {
             .build()
 
         val frame = GlyphMatrixFrame.Builder().addTop(obj).build(applicationContext)
-        mGM?.setMatrixFrame(frame.render())
+        mGM?.setMatrixFrame(frame.render(), true)
     }
 
     private fun drawBitmapWithFadeIn(bitmap: Bitmap) {
@@ -531,7 +554,7 @@ class ToyService: Service() {
             offsetY
         )
         val frame = frameBuilder.build(applicationContext)
-        mGM?.setMatrixFrame(frame.render())
+        mGM?.setMatrixFrame(frame.render(), true)
     }
 
     private fun drawResponseWithFadeIn(response: String, onEnd: () -> Unit = {}) {
@@ -556,7 +579,7 @@ class ToyService: Service() {
                 )
 
                 val frame = frameBuilder.build(applicationContext)
-                mGM?.setMatrixFrame(frame.render())
+                mGM?.setMatrixFrame(frame.render(), true)
 
                 delay(50L)
             }
@@ -578,25 +601,10 @@ class ToyService: Service() {
 
         val frameBuilder = createFrameBuilderWithCenteredText(getString(R.string.shake))
         val frame = frameBuilder.build(applicationContext)
-        mGM?.setMatrixFrame(frame.render())
+        mGM?.setMatrixFrame(frame.render(), true)
 
         shakingDetector.activate()
         orientationDetector.deactivate()
     }
 
-    private val serviceHandler: Handler = object : Handler(Looper.getMainLooper()) {
-        override fun handleMessage(msg: Message) {
-            val bundle: Bundle = msg.getData()
-
-            when(msg.what) {
-                GlyphToy.MSG_GLYPH_TOY -> {
-                    val event = bundle.getString(GlyphToy.MSG_GLYPH_TOY_DATA)
-                    if(GlyphToy.EVENT_CHANGE == event) onLongPress()
-                }
-                else -> super.handleMessage(msg)
-            }
-        }
-    }
-
-    private val serviceMessenger: Messenger = Messenger(serviceHandler)
 }
