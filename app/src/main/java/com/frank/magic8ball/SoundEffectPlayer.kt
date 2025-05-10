@@ -43,7 +43,7 @@ class SoundEffectPlayer(
      * adjusts playback speed and volume based on given intensity
      */
     fun adjustSound(intensity: Float) {
-        if(intensity < 0) return
+        if(streamId == -1) return
 
         val factor =
             if(intensity >= boundary) (min((intensity - boundary) / boundary, 1f)) / 4

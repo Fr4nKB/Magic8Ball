@@ -29,15 +29,15 @@ class ShakingDetector(
     private val onShakeEnd: (Double) -> Unit = {}
 ) {
     private lateinit var sensorEventListener: SensorEventListener
-    private var isActive by SynchronizedFlag(false) // ensure thread safety
+    private var isActive = false // ensure thread safety
 
     companion object {
         const val TAG = "Magic8Ball:ShakingDetector"
-        const val SHAKE_FORCE_THRESHOLD = 0.5
-        const val ON_START_THRESHOLD = 3
+        const val SHAKE_FORCE_THRESHOLD = 1.5F
+        const val ON_START_THRESHOLD = 8
         const val ON_END_THRESHOLD = 6
         const val SLIDING_WINDOW_SAMPLES = 5
-        const val NUM_SAMPLES_THRESHOLD = 20
+        const val NUM_SAMPLES_THRESHOLD = 25
     }
 
     fun register() {
@@ -58,7 +58,7 @@ class ShakingDetector(
 
             // calculates moving average from sliding window
             private fun calculateMovingAverage(newSample: Float): Double {
-                slidingWindow.addLast(newSample)
+                slidingWindow.add(newSample)
 
                 // remove oldest sample if queue exceeds window size
                 if(slidingWindow.size > SLIDING_WINDOW_SAMPLES) {
@@ -84,37 +84,34 @@ class ShakingDetector(
                     val deltaX = x - lastX
                     val deltaY = y - lastY
                     val deltaZ = z - lastZ
-                    val shakeForce = abs(deltaX + deltaY + deltaZ)
-
                     lastX = x
                     lastY = y
                     lastZ = z
 
                     // handle shake detection logic
-                    handleShakeDetection(shakeForce)
+                    val shakeForce = abs(deltaX + deltaY + deltaZ)
+                    if(shakeForce >= SHAKE_FORCE_THRESHOLD) handleShakeDetection(shakeForce - SHAKE_FORCE_THRESHOLD)
+                    else handleStillDetection()
                 }
             }
 
             private fun handleShakeDetection(shakeForce: Float) {
-                if(shakeForce > SHAKE_FORCE_THRESHOLD) {
-                    consecutiveNumShakeEvents += 1
-                    consecutiveNumStillEvents = 0
+                consecutiveNumShakeEvents += 1
+                consecutiveNumStillEvents = 0
 
-                    if(consecutiveNumShakeEvents >= ON_START_THRESHOLD) {
-                        if(!isShaking) {
-                            isShaking = true
-                            onShakeStart() // called only once
-                        }
-
-                        // online avg
-                        val numRecordedSamples = consecutiveNumShakeEvents - ON_START_THRESHOLD - 1
-                        if(numRecordedSamples == 1) avgShakeForce = shakeForce.toDouble()   // avoid NaN values
-                        else avgShakeForce += (shakeForce - avgShakeForce) / numRecordedSamples
-
-                        onShake(calculateMovingAverage(shakeForce)) // moving avg
+                if(consecutiveNumShakeEvents >= ON_START_THRESHOLD) {
+                    if(!isShaking) {
+                        isShaking = true
+                        onShakeStart() // called only once
                     }
+
+                    // calculate online avg for shake from start to finish
+                    val numRecordedSamples = consecutiveNumShakeEvents - ON_START_THRESHOLD - 1
+                    if(numRecordedSamples == 1) avgShakeForce = shakeForce.toDouble()   // avoid NaN values
+                    else avgShakeForce += (shakeForce - avgShakeForce) / numRecordedSamples
                 }
-                else handleStillDetection()
+
+                onShake(calculateMovingAverage(shakeForce)) // moving avg
             }
 
             private fun handleStillDetection() {
@@ -128,6 +125,7 @@ class ShakingDetector(
                         resetStateVariables()
                     }
                 }
+                else consecutiveNumShakeEvents = 0
             }
 
             private fun resetStateVariables() {

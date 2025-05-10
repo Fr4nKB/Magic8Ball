@@ -9,6 +9,9 @@ import android.graphics.Shader
 import androidx.core.graphics.createBitmap
 import com.nothing.ketchum.GlyphMatrixFrame
 import com.nothing.ketchum.GlyphMatrixObject
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import kotlin.math.roundToInt
 
 object Util {
@@ -100,6 +103,8 @@ object Util {
      * @param highlightedTokenIndex the word to highlight, -1 all words should be highlighted
      * @param lowBrightness the brightness level for non-highlighted words (default 5)
      * @param maxBrightness the brightness level for the highlighted word (default 255)
+     * @param offsetX the offset to apply to the x coordinate of the object (default 0)
+     * @param offsetY the offset to apply to the y coordinate of the object (default 0)
      *
      * @return GlyphMatrixFrame.Builder object containing the centered and optionally highlighted string
      *
@@ -137,6 +142,7 @@ object Util {
                 .setBrightness(brightness)
                 .build()
 
+            // each word is drawn on a different level
             when(index) {
                 0 -> frameBuilder.addTop(obj)
                 1 -> frameBuilder.addMid(obj)
@@ -145,5 +151,17 @@ object Util {
         }
 
         return frameBuilder
+    }
+
+    fun isCurrentTimeInInterval(start: String, end: String): Boolean {
+        val currentTime = ZonedDateTime.now(ZoneId.systemDefault()).toLocalTime()
+        val startTime = LocalTime.parse(start)
+        val endTime = LocalTime.parse(end)
+
+        return if (endTime.isBefore(startTime)) {
+            // interval spans midnight
+            currentTime.isAfter(startTime) || currentTime.isBefore(endTime)
+        }
+        else currentTime.isAfter(startTime) && currentTime.isBefore(endTime)
     }
 }

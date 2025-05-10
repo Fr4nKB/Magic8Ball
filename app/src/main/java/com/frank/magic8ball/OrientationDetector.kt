@@ -7,21 +7,29 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 
 /**
- * A class for detecting orientation changes using gyroscope sensors.
- * This class monitors sensor events and applies a smoothing filter to gyroscope data,
- * triggering a callback with the pitch angle when significant changes are detected.
+ * A class for detecting orientation changes using rotation vector sensor.
+ * This class monitors the sensor events and triggers a callback with the exponential moving average
+ * for pitch and roll angles.
  *
  * @param context The application context used to access the sensor service.
- * @param onOrientationChange A callback invoked with the pitch angle when an orientation change occurs.
+ * @param movingAvgWindowSize Specifies the window size for the moving average of pitch and roll values
+ * @param onOrientationChange A callback invoked with the moving average of  pitch and roll angle.
  *
  * @author Fr4nKB
  */
 class OrientationDetector(
     private val context: Context,
+    movingAvgWindowSize: Int,
     private val onOrientationChange: (Double, Double) -> Unit = { _, _ -> }
 ) {
     private lateinit var sensorEventListener: SensorEventListener
-    private var isActive by SynchronizedFlag(false) // ensure thread safety
+    private var isActive = false // ensure thread safety
+
+    // to implement exponential moving average
+    // lag effect if movingAvgWindowSize is big enough
+    private var exponentialFactor = 2.0 / (movingAvgWindowSize + 1)
+    private var exponentialMovingAveragePitch: Double = 0.0
+    private var exponentialMovingAverageRoll: Double = 0.0
 
     companion object {
         const val TAG = "Magic8Ball:OrientationDetector"
@@ -48,7 +56,13 @@ class OrientationDetector(
                     val pitch = Math.toDegrees(orientationValues[1].toDouble())
                     val roll = Math.toDegrees(orientationValues[2].toDouble())
 
-                    onOrientationChange(pitch, roll)
+                    val complementFactor = 1 - exponentialFactor
+                    exponentialMovingAveragePitch =
+                        exponentialFactor * pitch + complementFactor * exponentialMovingAveragePitch
+                    exponentialMovingAverageRoll =
+                        exponentialFactor * roll + complementFactor * exponentialMovingAverageRoll
+
+                    onOrientationChange(exponentialMovingAveragePitch, exponentialMovingAverageRoll)
                 }
             }
         }
