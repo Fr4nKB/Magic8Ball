@@ -75,7 +75,7 @@ object Util {
                 center,
                 dimension.toFloat(), // radius
                 intArrayOf(Color.WHITE, Color.WHITE, Color.BLACK), // white starts from center, stay white, finishes with black
-                floatArrayOf(0f, 0.36f, 1f), // white until 36% of the way then starts becoming black
+                floatArrayOf(0f, 0.35f, 1f), // white until 35% of the way then starts becoming black
                 Shader.TileMode.CLAMP // avoid repeating patterns
             )
         }
@@ -84,13 +84,15 @@ object Util {
             color = Color.BLACK
             strokeWidth = 3f
             style = Paint.Style.STROKE
+            isAntiAlias = false
+            isFilterBitmap = false
         }
 
         canvas.drawCircle(center, center, center, gradientPaint)
 
         // draw an 8, two black circles with a hole in it
-        canvas.drawCircle(center, center - center / 2 + 3, center / 2 - 3, blackPaint)
-        canvas.drawCircle(center, center + center / 2 - 3, center / 2 - 3, blackPaint)
+        canvas.drawCircle(center, center - center / 2 + 3, center / 2 - 3.05f, blackPaint)
+        canvas.drawCircle(center, center + center / 2 - 3, center / 2 - 3.05f, blackPaint)
 
         return bitmap
     }

@@ -34,7 +34,7 @@
             <!-- Required, allows users to preview your toy -->
             <meta-data
                 android:name="com.nothing.glyph.toy.image"
-                android:resource="@drawable/magic8ball_preview"/>
+                android:resource="@drawable/magic_8ball_preview"/>
 
         </service>
 
