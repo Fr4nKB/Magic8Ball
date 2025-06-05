@@ -1,4 +1,4 @@
-package com.frank.magic8ball
+package com.frank.magic8ball.util
 
 import kotlin.reflect.KProperty
 

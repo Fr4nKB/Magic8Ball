@@ -1,4 +1,4 @@
-package com.frank.magic8ball
+package com.frank.magic8ball.ui
 
 import android.content.Context
 import android.media.SoundPool
@@ -61,5 +61,10 @@ class SoundEffectPlayer(
             soundPool.stop(streamId)
             streamId = -1
         }
+    }
+
+    fun release() {
+        stopSound()
+        soundPool.release()
     }
 }

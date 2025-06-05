@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resources>
+  <string name="glyph_toy_magicball">マジック8ボール</string>
+  <string name="glyph_toy_magicball_summary">警告:予測が当たることもある</string>
+</resources>

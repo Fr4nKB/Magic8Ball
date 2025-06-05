@@ -1,8 +1,9 @@
 <resources>
-    <string name="app_name">Magic8Ball</string>
-    <string name="shake">shake</string>
+    <string name="glyph_toy_magicball">Magic 8 Ball</string>
+    <string name="glyph_toy_magicball_summary">WARNING: Predictions can sometimes be accurate.</string>
+    <string name="shake" translatable="false">shake</string>
 
-    <string-array name="positive_responses">
+    <string-array name="positive_responses" translatable="false">
         <item>YES</item>
         <item>NO DOUBT</item>
         <item>SAFE BET</item>
@@ -13,10 +14,10 @@
         <item>100%</item>
     </string-array>
 
-    <string-array name="neutral_responses">
+    <string-array name="neutral_responses" translatable="false">
         <item>MAYBE</item>
         <item>NO IDEA</item>
-        <item>ASK LATER ...</item>
+        <item>ASK LATER</item>
         <item>REPLY HAZY</item>
         <item>NOT SO SURE</item>
         <item>TOO SOON YET</item>
@@ -24,18 +25,18 @@
         <item>HARD TO TELL</item>
     </string-array>
 
-    <string-array name="negative_responses">
+    <string-array name="negative_responses" translatable="false">
         <item>NO</item>
         <item>DOUBT</item>
         <item>GIVE UP</item>
         <item>NO WAY</item>
         <item>NEVER EVER</item>
-        <item>WON\'T WORK</item>
+        <item>WONT WORK</item>
         <item>NOT TODAY</item>
         <item>NAH</item>
     </string-array>
 
-    <string-array name="strong_responses">
+    <string-array name="strong_responses" translatable="false">
         <item>WHOA SLOW PAL</item>
         <item>EASY NOW BUD</item>
         <item>TAKE IT EASY</item>

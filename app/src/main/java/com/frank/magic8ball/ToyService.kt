@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -18,28 +19,21 @@ import com.frank.magic8ball.Constants.ALL_UNLOCKS_DONE
 import com.frank.magic8ball.Constants.LAST_UNLOCK_NEGATIVE
 import com.frank.magic8ball.Constants.LAST_UNLOCK_NEUTRAL
 import com.frank.magic8ball.Constants.LAST_UNLOCK_POSITIVE
-import com.frank.magic8ball.Constants.MATRIX_DIMENSION
 import com.frank.magic8ball.Constants.NUM_UNLOCKS_NEGATIVE
 import com.frank.magic8ball.Constants.NUM_UNLOCKS_NEUTRAL
 import com.frank.magic8ball.Constants.NUM_UNLOCKS_POSITIVE
 import com.frank.magic8ball.Constants.SHARED_PREF_KEY
-import com.frank.magic8ball.Util.createFrameBuilderWithCenteredText
-import com.frank.magic8ball.Util.createLoadingResponseBitmap
-import com.frank.magic8ball.Util.createPreviewBitmap
-import com.frank.magic8ball.Util.isCurrentTimeInInterval
+import com.frank.magic8ball.util.Util.isCurrentTimeInInterval
+import com.frank.magic8ball.detectors.OrientationDetector
+import com.frank.magic8ball.detectors.ShakingDetector
+import com.frank.magic8ball.ui.GraphicsRenderer
+import com.frank.magic8ball.ui.SoundEffectPlayer
 import com.nothing.ketchum.Glyph
-import com.nothing.ketchum.GlyphMatrixFrame
 import com.nothing.ketchum.GlyphMatrixManager
-import com.nothing.ketchum.GlyphMatrixObject
 import com.nothing.ketchum.GlyphToy
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.random.Random
@@ -59,20 +53,17 @@ class ToyService: Service() {
     private lateinit var orientationDetector: OrientationDetector
     private lateinit var soundEffectPlayer: SoundEffectPlayer
     private lateinit var vibratorManager: VibratorManager
+    private lateinit var graphicsRenderer: GraphicsRenderer
 
-    private var isAnimating by SynchronizedFlag(false)
+    enum class State {
+        PREVIEW, SHAKE_PREVIEW, LOAD_ANIMATION, RESPONSE
+    }
+    private var currentState = State.PREVIEW
 
     private lateinit var neutralResponses: List<String>
     private lateinit var positiveResponses: List<String>
     private lateinit var negativeResponses: List<String>
     private lateinit var strongResponses: List<String>
-    private var loadingAnimationFrames: MutableList<Bitmap> = mutableListOf()
-
-    private val previewBitmap = createPreviewBitmap(MATRIX_DIMENSION)
-    private var highlightedTokenIndex = 0
-    private var currentResponse: String = ""
-    private var offsetX = 0
-    private var offsetY = 0
 
     // getting a positive or negative response is influenced by the force applied to the shake
     // neutral responses always have the same probability
@@ -95,33 +86,21 @@ class ToyService: Service() {
     companion object {
         private const val TAG = "Magic8Ball:ToyService"
 
-        private const val LOW_BRIGHTNESS = 15
-        private const val MAX_BRIGHTNESS = 255
-
         private const val MIN_PROBABILITY_THRESHOLD = 20
         private const val DEFAULT_PROBABILITY_THRESHOLD = 33
         private const val MAX_PROBABILITY_THRESHOLD = 47
 
-        private const val MOVING_AVG_WINDOW_SIZE = 5
-
         private const val SHAKE_FORCE_BOUNDARY = 14F
         private const val TOO_HIGH_FORCE_THRESHOLD = 30F
 
-        private const val HIGHLIGHT_PITCH_THRESHOLD = 5.0
-
-        private const val SHIFT_PITCH_THRESHOLD_LOW = 5.0
-        private const val SHIFT_PITCH_THRESHOLD_HIGH = 20.0
-        private const val SHIFT_ROLL_THRESHOLD_LOW = 165.0
-        private const val SHIFT_ROLL_THRESHOLD_HIGH = 150.0
-
-        private const val START_TIME_POSITIVE = "07:00:00"
-        private const val END_TIME_POSITIVE = "08:00:00"
+        private const val START_TIME_POSITIVE = "06:00:00"
+        private const val END_TIME_POSITIVE = "09:00:00"
 
         private const val START_TIME_NEUTRAL = "12:00:00"
-        private const val END_TIME_NEUTRAL = "13:00:00"
+        private const val END_TIME_NEUTRAL = "14:00:00"
 
         private const val START_TIME_NEGATIVE = "23:00:00"
-        private const val END_TIME_NEGATIVE = "00:00:00"
+        private const val END_TIME_NEGATIVE = "01:00:00"
     }
 
     override fun onCreate() {
@@ -137,18 +116,12 @@ class ToyService: Service() {
         negativeResponses = resources.getStringArray(R.array.negative_responses).toList()
         strongResponses = resources.getStringArray(R.array.strong_responses).toList()
 
-        // create the load animation frames once so they can be reused
-        for(i in 0 until 10) {
-            loadingAnimationFrames.add(
-                createLoadingResponseBitmap(MATRIX_DIMENSION, 0.45f - i/100f)
-            )
-        }
-
         soundEffectPlayer = SoundEffectPlayer(
             this,
             listOf(R.raw.slosh_1, R.raw.slosh_2, R.raw.slosh_3),
             SHAKE_FORCE_BOUNDARY
         )
+
         vibratorManager = getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
     }
 
@@ -156,26 +129,31 @@ class ToyService: Service() {
         // when onBind is called, the toy is currently being used by the user
         initGDK()
 
-        currentResponse = ""
-        highlightedTokenIndex = 0
         consecutiveResponses = 0
         prevResponseCategory = -1
-        offsetX = 0
-        offsetY = 0
 
         shakingDetector = ShakingDetector(
             applicationContext,
             onShakeStart = {
-                soundEffectPlayer.startSound()
+                if(currentState != State.LOAD_ANIMATION) {
+                    soundEffectPlayer.startSound()
+                    orientationDetector.deactivate()
+                }
             },
             onShake = { intensity ->
-                soundEffectPlayer.adjustSound(intensity.toFloat())
+                if(currentState != State.LOAD_ANIMATION) {
+                    soundEffectPlayer.adjustSound(intensity.toFloat())
+                }
             },
             onShakeReset = {
-                soundEffectPlayer.stopSound()
+                if(currentState != State.LOAD_ANIMATION) {
+                    soundEffectPlayer.stopSound()
+                    orientationDetector.activate()
+                }
             },
             onShakeEnd = { avgForce ->
                 soundEffectPlayer.stopSound()
+                orientationDetector.startCalibration()
                 onShakeEnd(avgForce)
             }
         ).apply {
@@ -185,16 +163,15 @@ class ToyService: Service() {
 
         orientationDetector = OrientationDetector(
             applicationContext,
-            MOVING_AVG_WINDOW_SIZE,
             onOrientationChange = { pitch, roll ->
-                if(currentResponse.isNotEmpty()) {
-                    highLightToken(pitch)
-                    shiftText(pitch, roll)
+                if(graphicsRenderer.updateOffsets(pitch, roll)) {
+                    vibratorManager.defaultVibrator.vibrate(
+                        VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
+                    )
                 }
             }
         ).apply {
             register()
-            activate()
         }
 
         return serviceMessenger.binder
@@ -202,15 +179,17 @@ class ToyService: Service() {
 
     override fun onUnbind(intent: Intent?): Boolean {
         // the user changed toy
+        graphicsRenderer.cancelAnimation()
         mGM?.turnOff()
         mGM?.unInit()
         mGM = null
         mCallback = null
 
         // release all sensors
-        soundEffectPlayer.stopSound()
+        soundEffectPlayer.release()
         shakingDetector.unregister(applicationContext)
         orientationDetector.unregister(applicationContext)
+
         return false
     }
 
@@ -219,7 +198,13 @@ class ToyService: Service() {
         mCallback = object : GlyphMatrixManager.Callback {
             override fun onServiceConnected(componentName: ComponentName) {
                 mGM?.register(Glyph.DEVICE_23112)
-                drawBitmap(previewBitmap)   // draw the toy preview
+
+                // initialize graphicsRenderer
+                graphicsRenderer = GraphicsRenderer(applicationContext, mGM)
+                graphicsRenderer.currentResponse = ""
+                graphicsRenderer.offsetX = 0
+                graphicsRenderer.offsetY = 0
+                graphicsRenderer.drawPreview()   // draw the toy preview
             }
 
             override fun onServiceDisconnected(componentName: ComponentName) {}
@@ -227,126 +212,14 @@ class ToyService: Service() {
         mGM?.init(mCallback)
     }
 
-    /**
-    * shows a pulsing ring animation,
-    * speed and number of repetitions are randomized
-    * */
-    private fun drawLoadingAnimation(onEnd: () -> Unit) {
-        if(isAnimating) return
-        isAnimating = true
-
-        val frameDurationMs = listOf(70L, 100L, 115L).random()
-        val numberOfRepetitions = Random.nextInt(1, 3)
-
-        CoroutineScope(Dispatchers.Main).launch {
-            val numFrames = loadingAnimationFrames.size
-
-            var numRep = 0
-            var index = 0
-            var reverse = false
-
-            while(true) {
-                // the annular width of the ring gradually increases
-                // the brightness is proportional to the annular width
-                // the reverse phase shrinks the annular width
-                drawBitmap(loadingAnimationFrames[index], MAX_BRIGHTNESS * (index + 1) / numFrames)
-
-                if(reverse && index == 0) {
-                    numRep += 1
-                    reverse = false
-                }
-                else if(!reverse && index == loadingAnimationFrames.size - 1) reverse = true
-
-                if(numRep >= numberOfRepetitions) break
-
-                if(reverse) index -= 1
-                else index += 1
-
-                delay(frameDurationMs)
-            }
-
-            isAnimating = false
-            onEnd()
-        }
-    }
-
-    private fun drawBitmap(bitmap: Bitmap, brightness: Int = MAX_BRIGHTNESS) {
-        val obj = GlyphMatrixObject.Builder()
-            .setImageSource(bitmap)
-            .setPosition(0, 0)
-            .setBrightness(brightness)
-            .build()
-
-        val frame = GlyphMatrixFrame.Builder().addTop(obj).build(applicationContext)
-        mGM?.setMatrixFrame(frame.render())
-    }
-
-    /**
-     * draws the given bitmap while gradually increasing the brightness
-     * */
-    private fun drawBitmapWithFadeIn(bitmap: Bitmap) {
-        if(isAnimating) return
-
-        CoroutineScope(Dispatchers.Main).launch {
-            isAnimating = true
-
-            for(i in 0 until 10) {
-                drawBitmap(bitmap, MAX_BRIGHTNESS * (i + 1) / 25)
-                delay(50L)
-            }
-
-            isAnimating = false
-        }
-    }
-
-    private fun drawResponse(response: String) {
-        val frameBuilder = createFrameBuilderWithCenteredText(
-            response,
-            highlightedTokenIndex,
-            LOW_BRIGHTNESS,
-            MAX_BRIGHTNESS,
-            offsetX,
-            offsetY
-        )
-        val frame = frameBuilder.build(applicationContext)
-        mGM?.setMatrixFrame(frame.render())
-    }
-
-    private fun drawResponseWithFadeIn(response: String, onEnd: () -> Unit = {}) {
-        if(isAnimating) return
-        isAnimating = true
-
-        CoroutineScope(Dispatchers.Main).launch {
-            for(i in 0 until 10) {
-                val(brightness, offsetXValue, offsetYValue) = if(i == 9) {
-                    Triple(MAX_BRIGHTNESS, offsetX, offsetY)
-                }
-                else Triple(MAX_BRIGHTNESS * (i + 1) / 25, 0, 0)
-
-                val frameBuilder = createFrameBuilderWithCenteredText(
-                    response,
-                    highlightedTokenIndex,
-                    LOW_BRIGHTNESS,
-                    brightness,
-                    offsetXValue,
-                    offsetYValue
-                )
-
-                val frame = frameBuilder.build(applicationContext)
-                mGM?.setMatrixFrame(frame.render())
-
-                delay(50L)
-            }
-
-            isAnimating = false
-            onEnd()
-        }
-    }
-
     private val serviceHandler: Handler = object : Handler(Looper.getMainLooper()) {
         override fun handleMessage(msg: Message) {
+            val bundle: Bundle = msg.getData()
             when(msg.what) {
-                GlyphToy.MSG_GLYPH_TOY -> {}
+                GlyphToy.MSG_GLYPH_TOY -> {
+                    val event = bundle.getString(GlyphToy.MSG_GLYPH_TOY_DATA)
+                    if(GlyphToy.EVENT_CHANGE == event) onLongPress()
+                }
                 else -> super.handleMessage(msg)
             }
         }
@@ -354,42 +227,76 @@ class ToyService: Service() {
 
     private val serviceMessenger: Messenger = Messenger(serviceHandler)
 
+    private fun onLongPress() {
+        currentState = when(currentState) {
+           State.PREVIEW -> {
+               graphicsRenderer.currentResponse = getString(R.string.shake)
+               graphicsRenderer.offsetX = 0
+               graphicsRenderer.offsetY = 0
+               orientationDetector.activate()
+               graphicsRenderer.drawResponse()
+
+               State.SHAKE_PREVIEW
+           }
+
+           State.SHAKE_PREVIEW -> State.SHAKE_PREVIEW
+
+           State.RESPONSE -> {
+               graphicsRenderer.currentResponse = ""
+               graphicsRenderer.offsetX = 0
+               graphicsRenderer.offsetY = 0
+               orientationDetector.deactivate()
+               graphicsRenderer.drawPreview()
+
+               State.PREVIEW
+           }
+
+           else -> currentState
+        }
+    }
+
     /**
-     * called when a shake is successfully detected,
+     * Called when a shake is successfully detected,
      * adjust probabilities based on avg shake force and draws a random response
      * */
     private fun onShakeEnd(avgForce: Double) {
-        currentResponse = ""
-        vibratorManager.defaultVibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+        vibratorManager.defaultVibrator.vibrate(
+            VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
+        )
 
-        drawLoadingAnimation {
+        graphicsRenderer.currentResponse = ""
+        currentState = State.LOAD_ANIMATION
+
+        graphicsRenderer.drawLoadingAnimation {
             // get a random response, adjust probabilities based on the avg force if needed
             if(avgForce >= TOO_HIGH_FORCE_THRESHOLD) {
-                currentResponse = strongResponses.random()
-                highlightedTokenIndex = currentResponse.split(" ").size / 2
-                drawResponseWithFadeIn(currentResponse)
+                val newResponse = strongResponses.random()
+                graphicsRenderer.currentResponse = newResponse
+                graphicsRenderer.drawResponseWithFadeIn()
             }
             else {
                 updateProbabilities(avgForce)
 
                 val (rndCategory, newUnlockBitmap) = drawRndCategory()
                 if(newUnlockBitmap != null) {
-                    drawBitmapWithFadeIn(newUnlockBitmap)
+                    graphicsRenderer.drawBitmapWithFadeIn(newUnlockBitmap)
                     return@drawLoadingAnimation
                 }
 
-                val response = getRndResponse(rndCategory)
-                when(response) {
+                when(val response = getRndResponse(rndCategory)) {
                     is String -> {
-                        currentResponse = response
-                        highlightedTokenIndex = currentResponse.split(" ").size / 2
-                        drawResponseWithFadeIn(response)
-
+                        graphicsRenderer.currentResponse = response
+                        graphicsRenderer.drawResponseWithFadeIn()
                     }
-                    is Bitmap -> drawBitmapWithFadeIn(response)
+                    is Bitmap -> {
+                        graphicsRenderer.drawBitmapWithFadeIn(response)
+                    }
                     else -> {}
                 }
             }
+
+            orientationDetector.endCalibration()
+            currentState = State.RESPONSE
         }
     }
 
@@ -466,71 +373,9 @@ class ToyService: Service() {
         }
     }
 
-    /**
-     * highlights one of the word in the response, based on the pitch angle of the phone
-     * */
-    private fun highLightToken(pitch: Double) {
-        if(isAnimating) return
-
-        // adjust pitch to handle vertical position
-        val adjustedPitch = if(abs(pitch) > 45) {
-            if(pitch > 0) pitch - 90
-            else pitch + 90
-        } else pitch
-
-        val numTokens = currentResponse.split(" ").size
-        val previousIndex = highlightedTokenIndex
-
-        // change which token is highlighted based on pitch angle
-        highlightedTokenIndex =
-            if(adjustedPitch > HIGHLIGHT_PITCH_THRESHOLD) max(highlightedTokenIndex - 1, 0)
-            else if(adjustedPitch < -HIGHLIGHT_PITCH_THRESHOLD)  min(highlightedTokenIndex + 1, numTokens - 1)
-            else {
-                when(numTokens) {
-                    2 -> highlightedTokenIndex
-                    3 -> 1
-                    else -> 0
-                }
-            }
-
-        if(highlightedTokenIndex != previousIndex) {
-            vibratorManager.defaultVibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
-            drawResponse(currentResponse)
-        }
-    }
-
-    /**
-     * shifts the response by some pixels based on the roll angle of the phone
-     * */
-    private fun shiftText(pitch: Double, roll: Double) {
-        if(isAnimating) return
-
-        val absRoll = abs(roll)
-        val offset = if(absRoll > SHIFT_ROLL_THRESHOLD_LOW) 0
-        else if(absRoll in SHIFT_ROLL_THRESHOLD_HIGH..SHIFT_ROLL_THRESHOLD_LOW) 1
-        else 2
-
-        val oldOffsetX = offsetX
-        offsetX = if(roll > 0) -offset else offset
-
-        val oldOffsetY = offsetY
-        offsetY = when {
-            pitch <= -SHIFT_PITCH_THRESHOLD_HIGH -> 2
-            pitch in -SHIFT_PITCH_THRESHOLD_HIGH..-SHIFT_PITCH_THRESHOLD_LOW -> 1
-            pitch in SHIFT_PITCH_THRESHOLD_LOW..SHIFT_PITCH_THRESHOLD_HIGH -> -1
-            pitch >= SHIFT_PITCH_THRESHOLD_HIGH -> -2
-            else -> 0
-        }
-
-        if(offsetX != oldOffsetX || offsetY != oldOffsetY) {
-            vibratorManager.defaultVibrator.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
-            drawResponse(currentResponse)
-        }
-    }
-
     private fun getLastUnlockDateAndTotalNum(): Pair<String, Int>? {
-        var lastUnlockDate = ""
-        var numUnlocks: Int
+        val lastUnlockDate: String
+        val numUnlocks: Int
 
         // check if event inside a valid time interval and retrieve last unlock time
         // for corresponding category
@@ -584,15 +429,10 @@ class ToyService: Service() {
     }
 
     private fun unlockResponse(): Bitmap? {
-        var lastUnlockDate = ""
-        var numUnlocks: Int
+        val result = getLastUnlockDateAndTotalNum() ?: return null
 
-        val result = getLastUnlockDateAndTotalNum()
-        if(result != null) {
-            lastUnlockDate = result.first
-            numUnlocks = result.second
-        }
-        else return null
+        val lastUnlockDate = result.first
+        var numUnlocks = result.second
 
         if(numUnlocks >= 3) return null
 
@@ -602,15 +442,11 @@ class ToyService: Service() {
             try {
                 if(LocalDate.parse(lastUnlockDate) == currentDate) return null
             }
-            catch (e: Exception) {
-                e.printStackTrace()
-                return null
-            }
+            catch (_: Exception) { return null }
         }
 
         numUnlocks += 1
-        val unlocks = updateUnlocksCount(numUnlocks, currentDate)
-        if(unlocks == null) return null
+        val unlocks = updateUnlocksCount(numUnlocks, currentDate) ?: return null
 
         if(numUnlocksNeutral + numUnlocksPositive + numUnlocksNegative >= 9) {
             sharedPreferences.edit { putBoolean(ALL_UNLOCKS_DONE, true) }

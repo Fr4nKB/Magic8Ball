@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resources>
+  <string name="glyph_toy_magicball">神奇 8 号球</string>
+  <string name="glyph_toy_magicball_summary">警告：有时候这些预测真的准</string>
+</resources>

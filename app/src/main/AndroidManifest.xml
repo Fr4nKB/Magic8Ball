@@ -11,7 +11,7 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="@string/glyph_toy_magicball"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Magic8Ball">
@@ -29,12 +29,22 @@
             <!-- Required, otherwise your toy will not be display in manager list -->
             <meta-data
                 android:name="com.nothing.glyph.toy.name"
-                android:resource="@string/app_name"/>
+                android:resource="@string/glyph_toy_magicball"/>
 
             <!-- Required, allows users to preview your toy -->
             <meta-data
                 android:name="com.nothing.glyph.toy.image"
                 android:resource="@drawable/magic_8ball_preview"/>
+
+            <!-- Optional, Briefly describe your toy in one sentence -->
+            <meta-data
+                android:name="com.nothing.glyph.toy.summary"
+                android:resource="@string/glyph_toy_magicball_summary" />
+
+            <!-- Optional, Activate long press -->
+            <meta-data
+                android:name="com.nothing.glyph.toy.longpress"
+                android:value="1" />
 
         </service>
 

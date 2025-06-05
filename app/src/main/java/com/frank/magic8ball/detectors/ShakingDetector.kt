@@ -1,4 +1,4 @@
-package com.frank.magic8ball
+package com.frank.magic8ball.detectors
 
 import android.content.Context
 import android.hardware.Sensor
@@ -6,6 +6,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import kotlin.math.abs
+import com.frank.magic8ball.util.SynchronizedFlag
 
 /**
  * A class to detect shaking motion using accelerometer sensors.
@@ -29,7 +30,7 @@ class ShakingDetector(
     private val onShakeEnd: (Double) -> Unit = {}
 ) {
     private lateinit var sensorEventListener: SensorEventListener
-    private var isActive = false // ensure thread safety
+    private var isActive by SynchronizedFlag(false) // ensure thread synchronization safety
 
     companion object {
         const val TAG = "Magic8Ball:ShakingDetector"

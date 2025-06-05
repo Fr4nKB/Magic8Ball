@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resources>
+  <string name="glyph_toy_magicball">Magisk 8-boll</string>
+  <string name="glyph_toy_magicball_summary">Varning! Förutsägelser kan ibland vara korrekta</string>
+</resources>

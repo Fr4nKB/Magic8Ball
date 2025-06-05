@@ -2,6 +2,8 @@ package com.frank.magic8ball
 
 object Constants {
     const val MATRIX_DIMENSION = 25
+    const val MAX_OBJECT_BRIGHTNESS = 255
+    const val MAX_CHANNEL_BRIGHTNESS = 2047
 
     const val SHARED_PREF_KEY = "settings"
     const val LAST_UNLOCK_POSITIVE = "last_positive_unlock"

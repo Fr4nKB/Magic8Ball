@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resources>
+  <string name="glyph_toy_magicball">Bola mágica 8</string>
+  <string name="glyph_toy_magicball_summary">ADVERTENCIA: Las predicciones a veces pueden ser precisas</string>
+</resources>
