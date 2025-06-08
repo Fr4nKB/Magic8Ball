@@ -9,8 +9,8 @@ import com.frank.magic8ball.util.SynchronizedFlag
 import com.frank.magic8ball.util.Util.calculateHorizontalOffset
 import com.frank.magic8ball.util.Util.calculateVerticalOffset
 import com.frank.magic8ball.util.Util.createFrameBuilderWithCenteredText
-import com.frank.magic8ball.util.Util.createLoadingAnimationFrame
 import com.frank.magic8ball.util.Util.getRingIndexes
+import com.frank.magic8ball.util.Util.loadLoadingAnimation
 import com.nothing.ketchum.GlyphMatrixFrame
 import com.nothing.ketchum.GlyphMatrixManager
 import com.nothing.ketchum.GlyphMatrixObject
@@ -29,7 +29,7 @@ class GraphicsRenderer(
     private var isLoadingAnimShowing by SynchronizedFlag(false)
 
     private var animationJob: Job? = null
-    private var loadingAnimationFrames: MutableList<Bitmap> = mutableListOf()
+    private var loadingAnimationFrames: List<IntArray> = listOf()
     private val radius = MATRIX_DIMENSION / 2
     private var gradientIndexes = listOf(
         getRingIndexes(MATRIX_DIMENSION, radius - 2),
@@ -37,7 +37,6 @@ class GraphicsRenderer(
         getRingIndexes(MATRIX_DIMENSION, radius)
     )
 
-    private var currentLoadingAnimationFrame: IntArray = IntArray(0) { MATRIX_DIMENSION * MATRIX_DIMENSION }
     var currentResponse: String = ""
 
     var offsetX: Int = 0
@@ -48,12 +47,7 @@ class GraphicsRenderer(
     }
 
     init {
-        // create the load animation frames once so they can be reused
-        repeat(20) {
-            loadingAnimationFrames.add(
-                createLoadingAnimationFrame(MATRIX_DIMENSION)
-            )
-        }
+        loadingAnimationFrames = loadLoadingAnimation(context)
     }
 
     /**
@@ -81,64 +75,32 @@ class GraphicsRenderer(
         return channels
     }
 
-    private fun renderLoadingAnimationFrame(frame: Bitmap, brightness: Int): IntArray {
-        val obj = GlyphMatrixObject.Builder()
-            .setImageSource(frame)
-            .setPosition(0, 0)
-            .setBrightness(brightness)
-            .build()
-
-        return GlyphMatrixFrame.Builder().addTop(obj).build(context).render()
-    }
-
     fun drawLoadingAnimation(onEnd: () -> Unit) {
         isLoadingAnimShowing = true
-        val maxFrameDurationMs = 200L
-        val minFrameDurationMs = 160L
-        val percentages = listOf(0.0, 0.25, 0.5, 0.75, 1.0)
-
-        val numPercentages = percentages.size
+        val maxFrameDurationMs = 30L
+        val minFrameDurationMs = 20L
         val numFrames = loadingAnimationFrames.size
 
         animationJob?.cancel()
         animationJob = CoroutineScope(Dispatchers.Main).launch {
-            val halfFrames = numFrames / 2
+            val halfNumFrames = numFrames / 2
             var halfIndex = 0
             var reverse = false
-            currentLoadingAnimationFrame.fill(0)
 
-            // applies a fade-in and fade-out effects
-            // starting and ending frames are shown for a longer period
-            // interpolation is applied between frames
-            loadingAnimationFrames.forEach { frame ->
-                val brightnessFactor = ((halfIndex + 1) / halfFrames.toDouble()).pow(1.5)
-                val delayFactor = ((halfFrames - halfIndex) / halfFrames.toDouble()).pow(0.5)
+            loadingAnimationFrames.forEach {
+                mGM?.setMatrixFrame(it)
+                val delayFactor = ((halfNumFrames - halfIndex) / halfNumFrames.toDouble()).pow(0.5)
 
-                if(!reverse && halfIndex == halfFrames - 1) {
-                    reverse = true
-                    halfIndex = halfFrames  // keep brightness and delay equal for two middle frames
-                }
+                if(!reverse && halfIndex == halfNumFrames - 1) reverse = true
 
                 if(reverse) halfIndex -= 1
                 else halfIndex += 1
 
-                val delayPerInterpolatedFrame = (maxFrameDurationMs * delayFactor)
+                val delay = (maxFrameDurationMs * delayFactor)
                     .toLong()
-                    .coerceAtLeast(minFrameDurationMs) / numPercentages
+                    .coerceAtLeast(minFrameDurationMs)
 
-                // create next frame and interpolate with current one
-                renderLoadingAnimationFrame(frame, (MAX_OBJECT_BRIGHTNESS * brightnessFactor).toInt()).also { nextFrame ->
-                    percentages.map { percentage ->
-                        IntArray(currentLoadingAnimationFrame.size) { i ->
-                            ((currentLoadingAnimationFrame[i] * (1 - percentage)) + (nextFrame[i] * percentage)).toInt()
-                        }
-                    }.forEach { newFrame ->
-                        mGM?.setMatrixFrame(newFrame)
-                        delay(delayPerInterpolatedFrame)
-                    }
-
-                    currentLoadingAnimationFrame = nextFrame
-                }
+                delay(delay)
             }
 
             isLoadingAnimShowing = false

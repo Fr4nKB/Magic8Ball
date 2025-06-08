@@ -1,8 +1,6 @@
 package com.frank.magic8ball.util
 
-import android.graphics.Bitmap
-import android.graphics.Color
-import androidx.core.graphics.createBitmap
+import android.content.Context
 import com.nothing.ketchum.GlyphMatrixFrame
 import com.nothing.ketchum.GlyphMatrixObject
 import java.time.LocalTime
@@ -12,8 +10,9 @@ import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.pow
 import kotlin.math.roundToInt
-import androidx.core.graphics.set
-import kotlin.random.Random
+import com.frank.magic8ball.R
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
 object Util {
     private val specialCharDimensions: Map<Char, Int> = mapOf(
@@ -97,41 +96,13 @@ object Util {
         return indexes
     }
 
-    fun createLoadingAnimationFrame(matrixDim: Int): Bitmap {
-        val radius = matrixDim / 2
-        val bitmap = createBitmap(matrixDim, matrixDim)
-
-        getRingIndexes(matrixDim, radius).forEach {
-            val row = it / matrixDim
-            val col = it % matrixDim
-            bitmap[col, row] = Color.WHITE
+    fun loadLoadingAnimation(context: Context): List<IntArray> {
+        val inputStream = context.resources.openRawResource(R.raw.loading_animation)
+        return BufferedReader(InputStreamReader(inputStream)).use { reader ->
+            reader.lineSequence()
+                .map { line -> line.split(",").map { it.trim().toInt() }.toIntArray() }
+                .toList()
         }
-
-        getRingIndexes(matrixDim, radius - 1).forEach {
-            if(Random.nextInt(1, 100) < 80) {
-                val row = it / matrixDim
-                val col = it % matrixDim
-                bitmap[col, row] = Color.WHITE
-            }
-        }
-
-        getRingIndexes(matrixDim, radius - 2).forEach {
-            if(Random.nextInt(1, 100) < 50) {
-                val row = it / matrixDim
-                val col = it % matrixDim
-                bitmap[col, row] = Color.WHITE
-            }
-        }
-
-        getRingIndexes(matrixDim, radius - 3).forEach {
-            if(Random.nextInt(1, 100) < 30) {
-                val row = it / matrixDim
-                val col = it % matrixDim
-                bitmap[col, row] = Color.WHITE
-            }
-        }
-
-        return bitmap
     }
 
     /**

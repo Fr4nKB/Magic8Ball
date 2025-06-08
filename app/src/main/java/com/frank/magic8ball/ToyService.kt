@@ -239,7 +239,15 @@ class ToyService: Service() {
                State.SHAKE_PREVIEW
            }
 
-           State.SHAKE_PREVIEW -> State.SHAKE_PREVIEW
+           State.SHAKE_PREVIEW -> {
+               graphicsRenderer.currentResponse = ""
+               graphicsRenderer.offsetX = 0
+               graphicsRenderer.offsetY = 0
+               orientationDetector.deactivate()
+               graphicsRenderer.drawPreview()
+
+               State.PREVIEW
+           }
 
            State.RESPONSE -> {
                graphicsRenderer.currentResponse = ""
