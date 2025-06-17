@@ -10,7 +10,7 @@ import com.frank.magic8ball.util.Util.calculateHorizontalOffset
 import com.frank.magic8ball.util.Util.calculateVerticalOffset
 import com.frank.magic8ball.util.Util.createFrameBuilderWithCenteredText
 import com.frank.magic8ball.util.Util.getRingIndexes
-import com.frank.magic8ball.util.Util.loadLoadingAnimation
+import com.frank.magic8ball.util.Util.loadRndLoadingAnimation
 import com.nothing.ketchum.GlyphMatrixFrame
 import com.nothing.ketchum.GlyphMatrixManager
 import com.nothing.ketchum.GlyphMatrixObject
@@ -44,10 +44,7 @@ class GraphicsRenderer(
 
     companion object {
         private const val LOW_BRIGHTNESS = 10
-    }
-
-    init {
-        loadingAnimationFrames = loadLoadingAnimation(context)
+        private const val MIN_FRAME_DURATION_MS = 20L
     }
 
     /**
@@ -78,7 +75,7 @@ class GraphicsRenderer(
     fun drawLoadingAnimation(onEnd: () -> Unit) {
         isLoadingAnimShowing = true
         val maxFrameDurationMs = 30L
-        val minFrameDurationMs = 20L
+        loadingAnimationFrames = loadRndLoadingAnimation(context)
         val numFrames = loadingAnimationFrames.size
 
         animationJob?.cancel()
@@ -98,7 +95,7 @@ class GraphicsRenderer(
 
                 val delay = (maxFrameDurationMs * delayFactor)
                     .toLong()
-                    .coerceAtLeast(minFrameDurationMs)
+                    .coerceAtLeast(MIN_FRAME_DURATION_MS)
 
                 delay(delay)
             }
@@ -116,6 +113,7 @@ class GraphicsRenderer(
     }
 
     fun drawPreview() {
+        animationJob?.cancel()
         val channels = GlyphMatrixFrame.Builder().build(context).render()
 
         // small white circle at the center
@@ -155,7 +153,7 @@ class GraphicsRenderer(
             for(i in 0 until numFrames) {
                 val brightnessFactor = ((i + 1) / numFrames.toDouble()).pow(2)
                 drawBitmap(bitmap, (MAX_OBJECT_BRIGHTNESS * brightnessFactor).toInt())
-                delay(20L)
+                delay(MIN_FRAME_DURATION_MS)
             }
         }
     }
@@ -176,8 +174,6 @@ class GraphicsRenderer(
     }
 
     fun drawResponseWithFadeIn() {
-        if(currentResponse.isEmpty()) return
-
         val numFrames = 25
 
         animationJob?.cancel()
@@ -185,18 +181,21 @@ class GraphicsRenderer(
             for(i in 0 until numFrames) {
                 val brightnessFactor = ((i + 1) / numFrames.toDouble()).pow(2)
 
-                val frameBuilder = createFrameBuilderWithCenteredText(
-                    currentResponse,
-                    (MAX_OBJECT_BRIGHTNESS * brightnessFactor).toInt(),
-                    offsetX,
-                    offsetY
-                )
+                val frameBuilder = if(currentResponse.isNotEmpty()) {
+                    createFrameBuilderWithCenteredText(
+                        currentResponse,
+                        (MAX_OBJECT_BRIGHTNESS * brightnessFactor).toInt(),
+                        offsetX,
+                        offsetY
+                    )
+                }
+                else GlyphMatrixFrame.Builder()
 
                 val frame = frameBuilder.build(context).render()
                 val frameWithGradient = applyGradient(frame)
                 mGM?.setMatrixFrame(frameWithGradient)
 
-                delay(20L)
+                delay(MIN_FRAME_DURATION_MS)
             }
         }
     }

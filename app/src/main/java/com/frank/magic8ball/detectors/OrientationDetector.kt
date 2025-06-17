@@ -52,7 +52,7 @@ class OrientationDetector(
                 this.add(newSample)
                 if(this.size > SLIDING_WINDOW_SAMPLES) this.removeFirst()
 
-                return if(calibration) this.slice(0..CALIBRATION_WINDOW_SAMPLES).average()
+                return if(calibration) this.take(CALIBRATION_WINDOW_SAMPLES).average()
                 else this.average()
             }
 
@@ -85,8 +85,8 @@ class OrientationDetector(
                             onOrientationChange(avgPitch, avgRoll)
                         }
                         else {
-                            val avgPitch = slidingWindowPitch.calculateMovingAverage(pitch)
-                            val avgRoll = slidingWindowRoll.calculateMovingAverage(roll)
+                            val avgPitch = slidingWindowPitch.calculateMovingAverage(pitch, true)
+                            val avgRoll = slidingWindowRoll.calculateMovingAverage(roll, true)
                             basePitchAngle = avgPitch
                             baseRollAngle = avgRoll
                         }
@@ -122,6 +122,8 @@ class OrientationDetector(
 
     fun activate() {
         currentState = State.ACTIVE
+        slidingWindowPitch.clear()
+        slidingWindowRoll.clear()
     }
 
     fun deactivate() {
@@ -133,8 +135,6 @@ class OrientationDetector(
     fun startCalibration() {
         basePitchAngle = 0.0
         baseRollAngle = 0.0
-        slidingWindowPitch.clear()
-        slidingWindowRoll.clear()
         currentState = State.CALIBRATION
     }
 

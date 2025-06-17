@@ -28,7 +28,7 @@ import com.frank.magic8ball.detectors.OrientationDetector
 import com.frank.magic8ball.detectors.ShakingDetector
 import com.frank.magic8ball.ui.GraphicsRenderer
 import com.frank.magic8ball.ui.SoundEffectPlayer
-import com.nothing.ketchum.Glyph
+import com.nothing.ketchum.Glyph.DEVICE_23112
 import com.nothing.ketchum.GlyphMatrixManager
 import com.nothing.ketchum.GlyphToy
 import java.time.LocalDate
@@ -172,6 +172,7 @@ class ToyService: Service() {
             }
         ).apply {
             register()
+            activate()
         }
 
         return serviceMessenger.binder
@@ -197,7 +198,7 @@ class ToyService: Service() {
         mGM = GlyphMatrixManager.getInstance(applicationContext)
         mCallback = object : GlyphMatrixManager.Callback {
             override fun onServiceConnected(componentName: ComponentName) {
-                mGM?.register(Glyph.DEVICE_23112)
+                mGM?.register(DEVICE_23112)
 
                 // initialize graphicsRenderer
                 graphicsRenderer = GraphicsRenderer(applicationContext, mGM)
@@ -205,6 +206,7 @@ class ToyService: Service() {
                 graphicsRenderer.offsetX = 0
                 graphicsRenderer.offsetY = 0
                 graphicsRenderer.drawPreview()   // draw the toy preview
+                orientationDetector.startCalibration()
             }
 
             override fun onServiceDisconnected(componentName: ComponentName) {}
@@ -233,8 +235,8 @@ class ToyService: Service() {
                graphicsRenderer.currentResponse = getString(R.string.shake)
                graphicsRenderer.offsetX = 0
                graphicsRenderer.offsetY = 0
-               orientationDetector.activate()
                graphicsRenderer.drawResponse()
+               orientationDetector.endCalibration()
 
                State.SHAKE_PREVIEW
            }
@@ -243,7 +245,7 @@ class ToyService: Service() {
                graphicsRenderer.currentResponse = ""
                graphicsRenderer.offsetX = 0
                graphicsRenderer.offsetY = 0
-               orientationDetector.deactivate()
+               orientationDetector.startCalibration()
                graphicsRenderer.drawPreview()
 
                State.PREVIEW
@@ -253,7 +255,7 @@ class ToyService: Service() {
                graphicsRenderer.currentResponse = ""
                graphicsRenderer.offsetX = 0
                graphicsRenderer.offsetY = 0
-               orientationDetector.deactivate()
+               orientationDetector.startCalibration()
                graphicsRenderer.drawPreview()
 
                State.PREVIEW

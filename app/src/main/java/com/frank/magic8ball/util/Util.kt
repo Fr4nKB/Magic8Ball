@@ -1,6 +1,7 @@
 package com.frank.magic8ball.util
 
 import android.content.Context
+import com.frank.magic8ball.R
 import com.nothing.ketchum.GlyphMatrixFrame
 import com.nothing.ketchum.GlyphMatrixObject
 import java.time.LocalTime
@@ -10,7 +11,6 @@ import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.pow
 import kotlin.math.roundToInt
-import com.frank.magic8ball.R
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
@@ -80,8 +80,8 @@ object Util {
         val indexes = mutableListOf<Int>()
         val center = matrixDim / 2
         val range = listOf(
-            (radius - tolerance).toDouble().pow(2),
-            (radius + tolerance).toDouble().pow(2)
+            (radius - tolerance).pow(2),
+            (radius + tolerance).pow(2)
         )
 
         for(i in 0..matrixDim) {
@@ -96,8 +96,14 @@ object Util {
         return indexes
     }
 
-    fun loadLoadingAnimation(context: Context): List<IntArray> {
-        val inputStream = context.resources.openRawResource(R.raw.loading_animation)
+    fun loadRndLoadingAnimation(context: Context): List<IntArray> {
+        val rndAnimation = listOf(
+            R.raw.loading_animation_1,
+            R.raw.loading_animation_2,
+            R.raw.loading_animation_3
+        ).random()
+
+        val inputStream = context.resources.openRawResource(rndAnimation)
         return BufferedReader(InputStreamReader(inputStream)).use { reader ->
             reader.lineSequence()
                 .map { line -> line.split(",").map { it.trim().toInt() }.toIntArray() }
