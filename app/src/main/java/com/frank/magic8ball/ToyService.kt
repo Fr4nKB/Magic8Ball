@@ -1,5 +1,8 @@
 package com.frank.magic8ball
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.NotificationManager.IMPORTANCE_DEFAULT
 import android.app.Service
 import android.content.ComponentName
 import android.content.Intent
@@ -12,8 +15,10 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.Message
 import android.os.Messenger
+import android.os.UserManager
 import android.os.VibrationEffect
 import android.os.VibratorManager
+import androidx.core.app.NotificationCompat
 import androidx.core.content.edit
 import com.frank.magic8ball.Constants.ALL_UNLOCKS_DONE
 import com.frank.magic8ball.Constants.LAST_UNLOCK_NEGATIVE
@@ -23,11 +28,11 @@ import com.frank.magic8ball.Constants.NUM_UNLOCKS_NEGATIVE
 import com.frank.magic8ball.Constants.NUM_UNLOCKS_NEUTRAL
 import com.frank.magic8ball.Constants.NUM_UNLOCKS_POSITIVE
 import com.frank.magic8ball.Constants.SHARED_PREF_KEY
-import com.frank.magic8ball.util.Util.isCurrentTimeInInterval
 import com.frank.magic8ball.detectors.OrientationDetector
 import com.frank.magic8ball.detectors.ShakingDetector
 import com.frank.magic8ball.ui.GraphicsRenderer
 import com.frank.magic8ball.ui.SoundEffectPlayer
+import com.frank.magic8ball.util.Util.isCurrentTimeInInterval
 import com.nothing.ketchum.Glyph.DEVICE_23112
 import com.nothing.ketchum.GlyphMatrixManager
 import com.nothing.ketchum.GlyphToy
@@ -44,8 +49,7 @@ import kotlin.random.Random
  * @author Fr4nKB
  */
 class ToyService: Service() {
-    private var mGM: GlyphMatrixManager? = null
-    private var mCallback: GlyphMatrixManager.Callback? = null
+    private var glyphMatrixManager: GlyphMatrixManager? = null
 
     private lateinit var sharedPreferences: SharedPreferences
 
@@ -93,6 +97,8 @@ class ToyService: Service() {
         private const val SHAKE_FORCE_BOUNDARY = 14F
         private const val TOO_HIGH_FORCE_THRESHOLD = 30F
 
+        private const val CHANNEL_ID = "motion_channel"
+
         private const val START_TIME_POSITIVE = "06:00:00"
         private const val END_TIME_POSITIVE = "09:00:00"
 
@@ -101,6 +107,36 @@ class ToyService: Service() {
 
         private const val START_TIME_NEGATIVE = "23:00:00"
         private const val END_TIME_NEGATIVE = "01:00:00"
+    }
+
+    private fun createNotificationChannel() {
+        val notificationManager: NotificationManager =
+            getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        if(notificationManager.getNotificationChannel(CHANNEL_ID) != null) return
+
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            getString(R.string.glyph_toy_magicball),
+            IMPORTANCE_DEFAULT
+        )
+        notificationManager.createNotificationChannel(channel)
+    }
+
+    private fun startForeground() {
+        createNotificationChannel()
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_notify_more)
+            .setContentTitle("Motion tracking active")
+            .setContentText("Collecting accelerometer and gyroscope")
+            .setOngoing(true)
+            .build()
+
+        startForeground(1, notification)
+    }
+
+    private fun isSecondaryUser(): Boolean {
+        val userManager = getSystemService(USER_SERVICE) as UserManager
+        return !userManager.isSystemUser
     }
 
     override fun onCreate() {
@@ -123,6 +159,11 @@ class ToyService: Service() {
         )
 
         vibratorManager = getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager
+
+        graphicsRenderer = GraphicsRenderer(applicationContext)
+
+        // workaround for secondary profile restrictions on sensors
+        if(isSecondaryUser()) startForeground()
     }
 
     override fun onBind(intent: Intent?): IBinder {
@@ -137,7 +178,6 @@ class ToyService: Service() {
             onShakeStart = {
                 if(currentState != State.LOAD_ANIMATION) {
                     soundEffectPlayer.startSound()
-                    orientationDetector.deactivate()
                 }
             },
             onShake = { intensity ->
@@ -148,7 +188,6 @@ class ToyService: Service() {
             onShakeReset = {
                 if(currentState != State.LOAD_ANIMATION) {
                     soundEffectPlayer.stopSound()
-                    orientationDetector.activate()
                 }
             },
             onShakeEnd = { avgForce ->
@@ -181,42 +220,39 @@ class ToyService: Service() {
     override fun onUnbind(intent: Intent?): Boolean {
         // the user changed toy
         graphicsRenderer.cancelAnimation()
-        mGM?.turnOff()
-        mGM?.unInit()
-        mGM = null
-        mCallback = null
+        glyphMatrixManager?.turnOff()
+        glyphMatrixManager?.unInit()
+        glyphMatrixManager = null
 
         // release all sensors
         soundEffectPlayer.release()
-        shakingDetector.unregister(applicationContext)
-        orientationDetector.unregister(applicationContext)
+        shakingDetector.unregister()
+        orientationDetector.unregister()
 
         return false
     }
 
     private fun initGDK() {
-        mGM = GlyphMatrixManager.getInstance(applicationContext)
-        mCallback = object : GlyphMatrixManager.Callback {
-            override fun onServiceConnected(componentName: ComponentName) {
-                mGM?.register(DEVICE_23112)
+        glyphMatrixManager = GlyphMatrixManager.getInstance(applicationContext)
 
-                // initialize graphicsRenderer
-                graphicsRenderer = GraphicsRenderer(applicationContext, mGM)
-                graphicsRenderer.currentResponse = ""
-                graphicsRenderer.offsetX = 0
-                graphicsRenderer.offsetY = 0
-                graphicsRenderer.drawPreview()   // draw the toy preview
+        val callback = object : GlyphMatrixManager.Callback {
+            override fun onServiceConnected(componentName: ComponentName) {
+                glyphMatrixManager?.register(DEVICE_23112)
+
+                graphicsRenderer.setGlyphManager(glyphMatrixManager)
+                graphicsRenderer.drawPreview()
                 orientationDetector.startCalibration()
             }
 
             override fun onServiceDisconnected(componentName: ComponentName) {}
         }
-        mGM?.init(mCallback)
+
+        glyphMatrixManager?.init(callback)
     }
 
     private val serviceHandler: Handler = object : Handler(Looper.getMainLooper()) {
         override fun handleMessage(msg: Message) {
-            val bundle: Bundle = msg.getData()
+            val bundle: Bundle = msg.data
             when(msg.what) {
                 GlyphToy.MSG_GLYPH_TOY -> {
                     val event = bundle.getString(GlyphToy.MSG_GLYPH_TOY_DATA)
@@ -288,20 +324,18 @@ class ToyService: Service() {
                 updateProbabilities(avgForce)
 
                 val (rndCategory, newUnlockBitmap) = drawRndCategory()
-                if(newUnlockBitmap != null) {
-                    graphicsRenderer.drawBitmapWithFadeIn(newUnlockBitmap)
-                    return@drawLoadingAnimation
-                }
-
-                when(val response = getRndResponse(rndCategory)) {
-                    is String -> {
-                        graphicsRenderer.currentResponse = response
-                        graphicsRenderer.drawResponseWithFadeIn()
+                if(newUnlockBitmap != null) graphicsRenderer.drawBitmapWithFadeIn(newUnlockBitmap)
+                else {
+                    when(val response = getRndResponse(rndCategory)) {
+                        is String -> {
+                            graphicsRenderer.currentResponse = response
+                            graphicsRenderer.drawResponseWithFadeIn()
+                        }
+                        is Bitmap -> {
+                            graphicsRenderer.drawBitmapWithFadeIn(response)
+                        }
+                        else -> {}
                     }
-                    is Bitmap -> {
-                        graphicsRenderer.drawBitmapWithFadeIn(response)
-                    }
-                    else -> {}
                 }
             }
 
@@ -314,20 +348,20 @@ class ToyService: Service() {
         probabilityThreshold =
             if(avgForce > SHAKE_FORCE_BOUNDARY) {
                 max(
-                    DEFAULT_PROBABILITY_THRESHOLD - (avgForce - SHAKE_FORCE_BOUNDARY).toInt(),
+                    DEFAULT_PROBABILITY_THRESHOLD - 3 - (avgForce - SHAKE_FORCE_BOUNDARY).toInt(),
                     MIN_PROBABILITY_THRESHOLD
                 )
             }
             else {
                 min(
-                    DEFAULT_PROBABILITY_THRESHOLD + (SHAKE_FORCE_BOUNDARY - avgForce).toInt(),
+                    DEFAULT_PROBABILITY_THRESHOLD + 3 + (SHAKE_FORCE_BOUNDARY - avgForce).toInt(),
                     MAX_PROBABILITY_THRESHOLD
                 )
             }
     }
 
     private fun drawRndCategory(): Pair<Int, Bitmap?> {
-        val rndIndex = Random.nextInt(1, 101)   // generate rnd number between 1 and 100
+        val rndIndex = Random.nextInt(0, 100)   // generate rnd number between 0 and 99
 
         // select response category based on set probabilities
         val category = when(rndIndex) {
@@ -372,14 +406,13 @@ class ToyService: Service() {
             }
         }
 
-        val numResponses = responses.size
-        val numTotalResponses = numResponses + numUnlocks
-        val rndIndex = Random.nextInt(0, numTotalResponses)
-
-        return if(rndIndex < numResponses) responses[rndIndex]
+        return if(numUnlocks > 0 && Random.nextInt(0, 100) < 25) {
+            val rndIndex = Random.nextInt(0, unlocks.size)
+            BitmapFactory.decodeResource(resources, unlocks[rndIndex])
+        }
         else {
-            val offset = numTotalResponses - rndIndex
-            BitmapFactory.decodeResource(resources, unlocks[unlocks.size - offset])
+            val rndIndex = Random.nextInt(0, responses.size)
+            responses[rndIndex]
         }
     }
 
@@ -444,7 +477,7 @@ class ToyService: Service() {
         val lastUnlockDate = result.first
         var numUnlocks = result.second
 
-        if(numUnlocks >= 3) return null
+        if(numUnlocks >= 3) return null     // all responses for this category are already unlocked
 
         // check if an unlock for this category was already made today
         val currentDate = ZonedDateTime.now(ZoneId.systemDefault()).toLocalDate()

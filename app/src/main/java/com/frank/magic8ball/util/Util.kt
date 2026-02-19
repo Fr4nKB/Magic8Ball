@@ -1,7 +1,6 @@
 package com.frank.magic8ball.util
 
 import android.content.Context
-import com.frank.magic8ball.R
 import com.nothing.ketchum.GlyphMatrixFrame
 import com.nothing.ketchum.GlyphMatrixObject
 import java.time.LocalTime
@@ -51,7 +50,7 @@ object Util {
 
         val numWords = tokens.size
 
-        return tokens.mapIndexed { index, token ->
+        return tokens.mapIndexed { _, token ->
             val isNumCharsEven = token.toList().size % 2 == 0
 
             val middlePoint = when(numWords) {
@@ -96,14 +95,8 @@ object Util {
         return indexes
     }
 
-    fun loadRndLoadingAnimation(context: Context): List<IntArray> {
-        val rndAnimation = listOf(
-            R.raw.loading_animation_1,
-            R.raw.loading_animation_2,
-            R.raw.loading_animation_3
-        ).random()
-
-        val inputStream = context.resources.openRawResource(rndAnimation)
+    fun loadCsv(context: Context, resId: Int): List<IntArray> {
+        val inputStream = context.resources.openRawResource(resId)
         return BufferedReader(InputStreamReader(inputStream)).use { reader ->
             reader.lineSequence()
                 .map { line -> line.split(",").map { it.trim().toInt() }.toIntArray() }

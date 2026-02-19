@@ -5,8 +5,8 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import kotlin.math.abs
 import com.frank.magic8ball.util.SynchronizedFlag
+import kotlin.math.sqrt
 
 /**
  * A class to detect shaking motion using accelerometer sensors.
@@ -27,35 +27,32 @@ class ShakingDetector(
     private val onShakeStart: () -> Unit = {},
     private val onShake: (Double) -> Unit = {},
     private val onShakeReset: () -> Unit = {},
-    private val onShakeEnd: (Double) -> Unit = {}
+    private val onShakeEnd: (Double) -> Unit = {},
 ) {
+    private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private lateinit var sensorEventListener: SensorEventListener
     private var isActive by SynchronizedFlag(false) // ensure thread synchronization safety
 
     companion object {
-        const val TAG = "Magic8Ball:ShakingDetector"
-        const val SHAKE_FORCE_THRESHOLD = 1.5F
-        const val ON_START_THRESHOLD = 8
-        const val ON_END_THRESHOLD = 6
-        const val SLIDING_WINDOW_SAMPLES = 5
-        const val NUM_SAMPLES_THRESHOLD = 25
+        private const val TAG = "Magic8Ball:ShakingDetector"
+        private const val SHAKE_FORCE_THRESHOLD = 2F
+        private const val ON_START_THRESHOLD = 10
+        private const val ON_END_THRESHOLD = 6
+        private const val SLIDING_WINDOW_SAMPLES = 5
+        private const val NUM_SAMPLES_THRESHOLD = 25
+        private const val ALPHA = 0.75F
     }
 
     fun register() {
-        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-
         sensorEventListener = object : SensorEventListener {
-            // previous sensor values
-            private var lastX = 0f
-            private var lastY = 0f
-            private var lastZ = 0f
-
             // shake-related state variables
             private var avgShakeForce = 0.0
             private val slidingWindow = ArrayDeque<Float>()
             private var isShaking = false
             private var consecutiveNumShakeEvents = 0
             private var consecutiveNumStillEvents = 0
+            private var smoothedValues = FloatArray(3)
+            private var lastValuesNotInit = true
 
             // calculates moving average from sliding window
             private fun calculateMovingAverage(newSample: Float): Double {
@@ -82,15 +79,23 @@ class ShakingDetector(
                     val y = event.values[1]
                     val z = event.values[2]
 
-                    val deltaX = x - lastX
-                    val deltaY = y - lastY
-                    val deltaZ = z - lastZ
-                    lastX = x
-                    lastY = y
-                    lastZ = z
+                    if(lastValuesNotInit) {
+                        smoothedValues[0] = x
+                        smoothedValues[1] = y
+                        smoothedValues[2] = z
+                        lastValuesNotInit = false
+                    }
+
+                    smoothedValues[0] = ALPHA * smoothedValues[0] + (1 - ALPHA) * x
+                    smoothedValues[1] = ALPHA * smoothedValues[1] + (1 - ALPHA) * y
+                    smoothedValues[2] = ALPHA * smoothedValues[2] + (1 - ALPHA) * z
+
+                    val filteredX = x - smoothedValues[0]
+                    val filteredY = y - smoothedValues[1]
+                    val filteredZ = z - smoothedValues[2]
 
                     // handle shake detection logic
-                    val shakeForce = abs(deltaX + deltaY + deltaZ)
+                    val shakeForce = sqrt(filteredX * filteredX + filteredY * filteredY + filteredZ * filteredZ)
                     if(shakeForce >= SHAKE_FORCE_THRESHOLD) handleShakeDetection(shakeForce - SHAKE_FORCE_THRESHOLD)
                     else handleStillDetection()
                 }
@@ -112,7 +117,7 @@ class ShakingDetector(
                     else avgShakeForce += (shakeForce - avgShakeForce) / numRecordedSamples
                 }
 
-                onShake(calculateMovingAverage(shakeForce)) // moving avg
+                if(isShaking) onShake(calculateMovingAverage(shakeForce)) // moving avg
             }
 
             private fun handleStillDetection() {
@@ -138,7 +143,7 @@ class ShakingDetector(
             }
         }
 
-        unregister(context)   // ensure only one listener is active
+        unregister()   // ensure only one listener is active
         sensorManager.registerListener(
             sensorEventListener,
             sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),
@@ -146,9 +151,8 @@ class ShakingDetector(
         )
     }
 
-    fun unregister(context: Context) {
+    fun unregister() {
         try {
-            val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
             sensorManager.unregisterListener(sensorEventListener)
         }
         catch (_: Exception) {}

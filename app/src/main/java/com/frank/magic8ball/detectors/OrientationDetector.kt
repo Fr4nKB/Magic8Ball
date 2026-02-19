@@ -20,6 +20,7 @@ class OrientationDetector(
     private val context: Context,
     private val onOrientationChange: (Double, Double) -> Unit = { _, _ -> }
 ) {
+    private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
     private lateinit var sensorEventListener: SensorEventListener
 
     private val slidingWindowPitch = ArrayDeque<Double>()
@@ -34,14 +35,12 @@ class OrientationDetector(
     }
 
     companion object {
-        const val TAG = "Magic8Ball:OrientationDetector"
-        const val SLIDING_WINDOW_SAMPLES = 12
-        const val CALIBRATION_WINDOW_SAMPLES = 5
+        private const val TAG = "Magic8Ball:OrientationDetector"
+        private const val SLIDING_WINDOW_SAMPLES = 12
+        private const val CALIBRATION_WINDOW_SAMPLES = 5
     }
 
     fun register() {
-        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-
         sensorEventListener = object : SensorEventListener {
             private var isFacingDown = false
 
@@ -98,7 +97,7 @@ class OrientationDetector(
             }
         }
 
-        unregister(context)   // ensure only one listener is active
+        unregister()   // ensure only one listener is active
         sensorManager.registerListener(
             sensorEventListener,
             sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR),
@@ -112,9 +111,8 @@ class OrientationDetector(
         )
     }
 
-    fun unregister(context: Context) {
+    fun unregister() {
         try {
-            val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
             sensorManager.unregisterListener(sensorEventListener)
         }
         catch (_: Exception) {}

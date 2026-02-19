@@ -6,6 +6,10 @@
 
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH"/>
+    <uses-permission android:name="android.permission.HIGH_SAMPLING_RATE_SENSORS"/>
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -13,14 +17,11 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/glyph_toy_magicball"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.Magic8Ball">
-
-        <!-- API key -->
-        <meta-data android:name="NothingKey" android:value="test"/>
+        android:supportsRtl="true">
 
         <service android:name="com.frank.magic8ball.ToyService"
-            android:exported="true">
+            android:exported="true"
+            android:foregroundServiceType="health">
 
             <intent-filter>
                 <action android:name="com.nothing.glyph.TOY"/>

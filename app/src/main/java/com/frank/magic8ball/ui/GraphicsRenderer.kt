@@ -3,14 +3,14 @@ package com.frank.magic8ball.ui
 import android.content.Context
 import android.graphics.Bitmap
 import com.frank.magic8ball.Constants.MATRIX_DIMENSION
-import com.frank.magic8ball.Constants.MAX_CHANNEL_BRIGHTNESS
 import com.frank.magic8ball.Constants.MAX_OBJECT_BRIGHTNESS
+import com.frank.magic8ball.R
 import com.frank.magic8ball.util.SynchronizedFlag
 import com.frank.magic8ball.util.Util.calculateHorizontalOffset
 import com.frank.magic8ball.util.Util.calculateVerticalOffset
 import com.frank.magic8ball.util.Util.createFrameBuilderWithCenteredText
 import com.frank.magic8ball.util.Util.getRingIndexes
-import com.frank.magic8ball.util.Util.loadRndLoadingAnimation
+import com.frank.magic8ball.util.Util.loadCsv
 import com.nothing.ketchum.GlyphMatrixFrame
 import com.nothing.ketchum.GlyphMatrixManager
 import com.nothing.ketchum.GlyphMatrixObject
@@ -23,13 +23,14 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 
 class GraphicsRenderer(
-    private val context: Context,
-    private val mGM: GlyphMatrixManager? = null
+    private val context: Context
 ) {
     private var isLoadingAnimShowing by SynchronizedFlag(false)
 
     private var animationJob: Job? = null
-    private var loadingAnimationFrames: List<IntArray> = listOf()
+    private var glyphMatrixManager: GlyphMatrixManager? = null
+    private var previewFrame = IntArray(MATRIX_DIMENSION * MATRIX_DIMENSION)
+    private var loadingAnimations: MutableList<List<IntArray>> = mutableListOf()
     private val radius = MATRIX_DIMENSION / 2
     private var gradientIndexes = listOf(
         getRingIndexes(MATRIX_DIMENSION, radius - 2),
@@ -45,6 +46,17 @@ class GraphicsRenderer(
     companion object {
         private const val LOW_BRIGHTNESS = 10
         private const val MIN_FRAME_DURATION_MS = 20L
+    }
+
+    init {
+        previewFrame = loadCsv(context, R.raw.preview)[0]
+        loadingAnimations.add(loadCsv(context, R.raw.loading_animation_1))
+        loadingAnimations.add(loadCsv(context, R.raw.loading_animation_2))
+        loadingAnimations.add(loadCsv(context, R.raw.loading_animation_3))
+    }
+
+    fun setGlyphManager(glyphManager: GlyphMatrixManager?) {
+        glyphMatrixManager = glyphManager
     }
 
     /**
@@ -75,17 +87,16 @@ class GraphicsRenderer(
     fun drawLoadingAnimation(onEnd: () -> Unit) {
         isLoadingAnimShowing = true
         val maxFrameDurationMs = 30L
-        loadingAnimationFrames = loadRndLoadingAnimation(context)
-        val numFrames = loadingAnimationFrames.size
+        val loadingAnimationFrames = loadingAnimations.random()
 
         animationJob?.cancel()
         animationJob = CoroutineScope(Dispatchers.Main).launch {
-            val halfNumFrames = numFrames / 2
+            val halfNumFrames = loadingAnimationFrames.size / 2
             var halfIndex = 0
             var reverse = false
 
             loadingAnimationFrames.forEach {
-                mGM?.setMatrixFrame(it)
+                glyphMatrixManager?.setMatrixFrame(it)
                 val delayFactor = ((halfNumFrames - halfIndex) / halfNumFrames.toDouble()).pow(0.5)
 
                 if(!reverse && halfIndex == halfNumFrames - 1) reverse = true
@@ -114,20 +125,10 @@ class GraphicsRenderer(
 
     fun drawPreview() {
         animationJob?.cancel()
-        val channels = GlyphMatrixFrame.Builder().build(context).render()
-
-        // small white circle at the center
-        getRingIndexes(25, 6, true, 0.5).forEach {
-            channels[it] = MAX_CHANNEL_BRIGHTNESS
-        }
-
-        // eight shape
-        val eight = listOf(236, 237, 238, 311, 312, 313, 386, 387, 388, 260, 264, 285, 289, 335, 339, 360, 364)
-        eight.forEach {
-            channels[it] = 0
-        }
-
-        mGM?.setMatrixFrame(channels)
+        currentResponse = ""
+        offsetX = 0
+        offsetY = 0
+        glyphMatrixManager?.setMatrixFrame(previewFrame)
     }
 
     private fun drawBitmap(bitmap: Bitmap, brightness: Int = MAX_OBJECT_BRIGHTNESS, gradient: Boolean = true) {
@@ -139,7 +140,7 @@ class GraphicsRenderer(
 
         val frame = GlyphMatrixFrame.Builder().addTop(obj).build(context).render()
         val frameWithGradient = if(gradient) applyGradient(frame) else frame
-        mGM?.setMatrixFrame(frameWithGradient)
+        glyphMatrixManager?.setMatrixFrame(frameWithGradient)
     }
 
     /**
@@ -170,7 +171,7 @@ class GraphicsRenderer(
 
         val frame = frameBuilder.build(context).render()
         val frameWithGradient = applyGradient(frame)
-        mGM?.setMatrixFrame(frameWithGradient)
+        glyphMatrixManager?.setMatrixFrame(frameWithGradient)
     }
 
     fun drawResponseWithFadeIn() {
@@ -193,7 +194,7 @@ class GraphicsRenderer(
 
                 val frame = frameBuilder.build(context).render()
                 val frameWithGradient = applyGradient(frame)
-                mGM?.setMatrixFrame(frameWithGradient)
+                glyphMatrixManager?.setMatrixFrame(frameWithGradient)
 
                 delay(MIN_FRAME_DURATION_MS)
             }

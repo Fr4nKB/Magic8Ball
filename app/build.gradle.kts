@@ -1,24 +1,21 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
 }
 
 android {
     namespace = "com.frank.magic8ball"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.frank.magic8ball"
         minSdk = 35
-        targetSdk = 35
-        versionCode = 9
-        versionName = "1.0"
+        targetSdk = 36
+        versionCode = 15
+        versionName = "1.0.2"
 
         ndk {
             debugSymbolLevel = "FULL"
         }
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -37,18 +34,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-
-    kotlinOptions {
-        jvmTarget = "11"
-    }
 }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.appcompat)
-    implementation(libs.material)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    implementation(files("libs/glyphsdk.aar"))  // import the sdk
+    implementation(files("libs/glyph-matrix-sdk-1.0.aar"))  // import the sdk
 }
