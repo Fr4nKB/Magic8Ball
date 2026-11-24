@@ -4,14 +4,14 @@ plugins {
 
 android {
     namespace = "com.frank.magic8ball"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.frank.magic8ball"
         minSdk = 35
-        targetSdk = 36
-        versionCode = 15
-        versionName = "1.0.2"
+        targetSdk = 37
+        versionCode = 16
+        versionName = "1.0.3"
 
         ndk {
             debugSymbolLevel = "FULL"
@@ -38,5 +38,5 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
-    implementation(files("libs/glyph-matrix-sdk-1.0.aar"))  // import the sdk
+    implementation(files("libs/glyph-matrix-sdk-2.0.aar"))  // import the sdk
 }
